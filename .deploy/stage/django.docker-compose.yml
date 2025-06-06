@@ -1,0 +1,18 @@
+version: "3"
+
+services:
+  setinc-django-stage:
+    image: 896549618545.dkr.ecr.us-east-1.amazonaws.com/setinc-back:{{tag}}
+    env_file:
+      - .env
+    environment:
+      ASM_AWS_ACCESS_KEY_ID: ${ASM_AWS_ACCESS_KEY_ID}
+      ASM_AWS_SECRET_ACCESS_KEY: ${ASM_AWS_SECRET_ACCESS_KEY}  
+    ports:
+      - 0:8000
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: setinc
+        awslogs-region: us-east-1
+        awslogs-stream-prefix: django-stage

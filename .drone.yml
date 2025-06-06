@@ -1,0 +1,404 @@
+kind: pipeline
+name: Set Inc Back End
+
+definitions:
+  environment: &global_environment
+    ASM_AWS_ACCESS_KEY_ID:
+      from_secret: ASM_AWS_ACCESS_KEY_ID
+    ASM_AWS_SECRET_ACCESS_KEY:
+      from_secret: ASM_AWS_SECRET_ACCESS_KEY
+    AWS_ACCESS_KEY_ID:
+      from_secret: aws_access_key_id
+    AWS_SECRET_ACCESS_KEY:
+      from_secret: aws_secret_access_key
+    CHANNEL_ID: C0565L83S84
+    SLACK_API_TOKEN:
+      from_secret: slack_token
+    ELASTIC_APM_SECRET_TOKEN:
+      from_secret: ELASTIC_APM_SECRET_TOKEN
+    ELASTIC_APM_SERVER_URL:
+      from_secret: ELASTIC_APM_SERVER_URL
+    ELASTIC_APM_CENTRAL_CONFIG:
+      from_secret: ELASTIC_APM_CENTRAL_CONFIG
+    ELASTIC_APM_DEBUG:
+      from_secret: ELASTIC_APM_DEBUG
+    LOGSTASH_HOST:
+      from_secret: LOGSTASH_HOST
+    LOGSTASH_PORT:
+      from_secret: LOGSTASH_PORT
+    LOGSTASH_USER:
+      from_secret: LOGSTASH_USER
+    LOGSTASH_PASSWORD:
+      from_secret: LOGSTASH_PASSWORD
+steps:
+
+- name: ggshield
+  image: public.ecr.aws/n3f5h0h1/appello-ggshield:latest
+  commands:
+  - ggshield secret scan ci
+  environment:
+    GITGUARDIAN_API_KEY:
+      from_secret: GITGUARDIAN_API_KEY
+      
+# ------------------------------------------------------------------------------
+#
+# DEVELOPMENT EVNVIRONMENT
+#
+# ------------------------------------------------------------------------------
+
+
+# Django app
+
+- name: Build Dev Django
+  image: plugins/ecr
+  username: DOCKER_USER
+  password: DOCKER_PASS
+  settings:
+    region: us-east-1
+    access_key:
+      from_secret: aws_access_key_id
+    secret_key:
+      from_secret: aws_secret_access_key
+    repo: 896549618545.dkr.ecr.us-east-1.amazonaws.com/setinc-back
+    registry: 896549618545.dkr.ecr.us-east-1.amazonaws.com
+    dockerfile: .deploy/dev/django.Dockerfile
+    tags:
+      - dev_django
+  when:
+    branch: dev
+    event:
+    - push
+    # - pull_request
+
+
+- name: Deploy Dev Django
+  image: kudato/drone-ecs-deploy
+  username: DOCKER_USER
+  password: DOCKER_PASS
+  settings:
+    region: us-east-1
+    access_key:
+      from_secret: aws_access_key_id
+    secret_key:
+      from_secret: aws_secret_access_key
+    cluster: appello-cluster-dev-stage-1
+    service: setinc-django-dev
+    compose_file: .deploy/dev/django.docker-compose.yml
+    params_file: .deploy/dev/django.ecs-params.yml
+    target_group_arn: arn:aws:elasticloadbalancing:us-east-1:896549618545:targetgroup/setinc-back-dev/52b5d1dfe42bb84c
+    deploy_tag: dev_django
+    container_name: setinc-django-dev
+    container_port: 8000
+  environment:
+    <<: *global_environment
+  when:
+    branch: dev
+    event:
+    - push
+    # - pull_request
+
+
+# Worker app
+
+- name: Build Dev Worker
+  image: plugins/ecr
+  username: DOCKER_USER
+  password: DOCKER_PASS
+  settings:
+    region: us-east-1
+    access_key:
+      from_secret: aws_access_key_id
+    secret_key:
+      from_secret: aws_secret_access_key
+    repo: 896549618545.dkr.ecr.us-east-1.amazonaws.com/setinc-back
+    registry: 896549618545.dkr.ecr.us-east-1.amazonaws.com
+    dockerfile: .deploy/dev/worker.Dockerfile
+    tags:
+      - dev_worker
+  when:
+    branch: dev
+    event:
+    - push
+    # - pull_request
+
+
+- name: Deploy Dev Worker
+  image: kudato/drone-ecs-deploy
+  username: DOCKER_USER
+  password: DOCKER_PASS
+  settings:
+    region: us-east-1
+    access_key:
+      from_secret: aws_access_key_id
+    secret_key:
+      from_secret: aws_secret_access_key
+    cluster: appello-cluster-dev-stage-1
+    service: setinc-worker-dev
+    compose_file: .deploy/dev/worker.docker-compose.yml
+    params_file: .deploy/dev/worker.ecs-params.yml
+    # target_group_arn:
+    deploy_tag: dev_worker
+    # container_name: setinc-worker-dev
+  environment:
+    <<: *global_environment
+  when:
+    branch: dev
+    event:
+    - push
+    # - pull_request
+
+
+
+# ------------------------------------------------------------------------------
+#
+# STAGING EVNVIRONMENT
+#
+# ------------------------------------------------------------------------------
+
+
+
+# Django app
+
+- name: Build Stage Django
+  image: plugins/ecr
+  username: DOCKER_USER
+  password: DOCKER_PASS
+  settings:
+    region: us-east-1
+    access_key:
+      from_secret: aws_access_key_id
+    secret_key:
+      from_secret: aws_secret_access_key
+    repo: 896549618545.dkr.ecr.us-east-1.amazonaws.com/setinc-back
+    registry: 896549618545.dkr.ecr.us-east-1.amazonaws.com
+    dockerfile: .deploy/stage/django.Dockerfile
+    tags:
+      - stage_django
+  when:
+    branch: stage
+    event:
+    - push
+    # - pull_request
+
+
+- name: Deploy Stage Django
+  image: kudato/drone-ecs-deploy
+  username: DOCKER_USER
+  password: DOCKER_PASS
+  settings:
+    region: us-east-1
+    access_key:
+      from_secret: aws_access_key_id
+    secret_key:
+      from_secret: aws_secret_access_key
+    cluster: appello-cluster-dev-stage-1
+    service: setinc-django-stage
+    compose_file: .deploy/stage/django.docker-compose.yml
+    params_file: .deploy/stage/django.ecs-params.yml
+    target_group_arn: arn:aws:elasticloadbalancing:us-east-1:896549618545:targetgroup/setinc-back-stage/20bde4ac5b800823
+    deploy_tag: stage_django
+    container_name: setinc-django-stage
+    container_port: 8000
+  environment:
+    <<: *global_environment  
+  when:
+    branch: stage
+    event:
+    - push
+    # - pull_request
+
+
+
+# Worker app
+
+- name: Build Stage Worker
+  image: plugins/ecr
+  username: DOCKER_USER
+  password: DOCKER_PASS
+  settings:
+    region: us-east-1
+    access_key:
+      from_secret: aws_access_key_id
+    secret_key:
+      from_secret: aws_secret_access_key
+    repo: 896549618545.dkr.ecr.us-east-1.amazonaws.com/setinc-back
+    registry: 896549618545.dkr.ecr.us-east-1.amazonaws.com
+    dockerfile: .deploy/stage/worker.Dockerfile
+    tags:
+      - stage_worker
+  when:
+    branch: stage
+    event:
+    - push
+    # - pull_request
+
+
+- name: Deploy Stage Worker
+  image: kudato/drone-ecs-deploy
+  username: DOCKER_USER
+  password: DOCKER_PASS
+  settings:
+    region: us-east-1
+    access_key:
+      from_secret: aws_access_key_id
+    secret_key:
+      from_secret: aws_secret_access_key
+    cluster: appello-cluster-dev-stage-1
+    service: setinc-worker-stage
+    compose_file: .deploy/stage/worker.docker-compose.yml
+    params_file: .deploy/stage/worker.ecs-params.yml
+    # target_group_arn:
+    deploy_tag: stage_worker
+    # container_name: setinc-worker-stage
+  environment:
+    <<: *global_environment  
+  when:
+    branch: stage
+    event:
+    - push
+    # - pull_request
+
+
+
+# ------------------------------------------------------------------------------
+#
+# PRODUCTION EVNVIRONMENT
+#
+# ------------------------------------------------------------------------------
+
+
+# Django app
+
+- name: Build Prod Django
+  image: plugins/ecr
+  username: DOCKER_USER
+  password: DOCKER_PASS
+  settings:
+    region: ap-southeast-2
+    access_key:
+      from_secret: si_aws_access_key_id
+    secret_key:
+      from_secret: si_aws_secret_access_key
+    repo: 361605666595.dkr.ecr.ap-southeast-2.amazonaws.com/setinc-prod
+    registry: 361605666595.dkr.ecr.ap-southeast-2.amazonaws.com
+    dockerfile: .deploy/prod/django.Dockerfile
+    tags:
+      - prod_django
+  when:
+    branch: master
+    event:
+    - push
+    # - pull_request
+
+
+- name: Deploy Prod Django
+  image: kudato/drone-ecs-deploy
+  username: DOCKER_USER
+  password: DOCKER_PASS
+  settings:
+    region: ap-southeast-2
+    access_key:
+      from_secret: si_aws_access_key_id
+    secret_key:
+      from_secret: si_aws_secret_access_key
+    cluster: production
+    service: setinc-django-prod
+    compose_file: .deploy/prod/django.docker-compose.yml
+    params_file: .deploy/prod/django.ecs-params.yml
+    target_group_arn: arn:aws:elasticloadbalancing:ap-southeast-2:361605666595:targetgroup/setinc-back-prod/73a04746def22af7
+    deploy_tag: prod_django
+    container_name: setinc-django-prod
+    container_port: 8000
+  environment:
+    ASM_AWS_ACCESS_KEY_ID:
+      from_secret: si_aws_access_key_id
+    ASM_AWS_SECRET_ACCESS_KEY:
+      from_secret: si_aws_secret_access_key
+    ELASTIC_APM_SECRET_TOKEN:
+      from_secret: ELASTIC_APM_SECRET_TOKEN
+    ELASTIC_APM_SERVER_URL:
+      from_secret: ELASTIC_APM_SERVER_URL
+    ELASTIC_APM_CENTRAL_CONFIG:
+      from_secret: ELASTIC_APM_CENTRAL_CONFIG
+    ELASTIC_APM_DEBUG:
+      from_secret: ELASTIC_APM_DEBUG
+    LOGSTASH_HOST:
+      from_secret: LOGSTASH_HOST
+    LOGSTASH_PORT:
+      from_secret: LOGSTASH_PORT
+    LOGSTASH_USER:
+      from_secret: LOGSTASH_USER
+    LOGSTASH_PASSWORD:
+      from_secret: LOGSTASH_PASSWORD  
+  when:
+    branch: master
+    event:
+    - push
+    # - pull_request
+
+
+# Worker app
+
+- name: Build Prod Worker
+  image: plugins/ecr
+  username: DOCKER_USER
+  password: DOCKER_PASS
+  settings:
+    region: ap-southeast-2
+    access_key:
+      from_secret: si_aws_access_key_id
+    secret_key:
+      from_secret: si_aws_secret_access_key
+    repo: 361605666595.dkr.ecr.ap-southeast-2.amazonaws.com/setinc-prod
+    registry: 361605666595.dkr.ecr.ap-southeast-2.amazonaws.com
+    dockerfile: .deploy/prod/worker.Dockerfile
+    tags:
+      - prod_worker
+  when:
+    branch: master
+    event:
+    - push
+    # - pull_request
+
+
+- name: Deploy Prod Worker
+  image: kudato/drone-ecs-deploy
+  username: DOCKER_USER
+  password: DOCKER_PASS
+  settings:
+    region: ap-southeast-2
+    access_key:
+      from_secret: si_aws_access_key_id
+    secret_key:
+      from_secret: si_aws_secret_access_key
+    cluster: production
+    service: setinc-worker-prod
+    compose_file: .deploy/prod/worker.docker-compose.yml
+    params_file: .deploy/prod/worker.ecs-params.yml
+    deploy_tag: prod_worker
+  environment:
+    ASM_AWS_ACCESS_KEY_ID:
+      from_secret: si_aws_access_key_id
+    ASM_AWS_SECRET_ACCESS_KEY:
+      from_secret: si_aws_secret_access_key
+    ELASTIC_APM_SECRET_TOKEN:
+      from_secret: ELASTIC_APM_SECRET_TOKEN
+    ELASTIC_APM_SERVER_URL:
+      from_secret: ELASTIC_APM_SERVER_URL
+    ELASTIC_APM_CENTRAL_CONFIG:
+      from_secret: ELASTIC_APM_CENTRAL_CONFIG
+    ELASTIC_APM_DEBUG:
+      from_secret: ELASTIC_APM_DEBUG
+    LOGSTASH_HOST:
+      from_secret: LOGSTASH_HOST
+    LOGSTASH_PORT:
+      from_secret: LOGSTASH_PORT
+    LOGSTASH_USER:
+      from_secret: LOGSTASH_USER
+    LOGSTASH_PASSWORD:
+      from_secret: LOGSTASH_PASSWORD  
+  when:
+    branch: master
+    event:
+    - push
+    # - pull_request

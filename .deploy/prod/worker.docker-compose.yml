@@ -1,0 +1,23 @@
+version: "3"
+
+services:
+  setinc-worker-prod:
+    image: 361605666595.dkr.ecr.ap-southeast-2.amazonaws.com/setinc-prod:{{tag}}
+    env_file:
+      - .env
+    environment:
+      ASM_AWS_ACCESS_KEY_ID: ${ASM_AWS_ACCESS_KEY_ID:?err}
+      ASM_AWS_SECRET_ACCESS_KEY: ${ASM_AWS_SECRET_ACCESS_KEY:?err}
+      ELASTIC_APM_SECRET_TOKEN: ${ELASTIC_APM_SECRET_TOKEN:?err}
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:?err}
+      ELASTIC_APM_CENTRAL_CONFIG: ${ELASTIC_APM_CENTRAL_CONFIG:?err}
+      ELASTIC_APM_DEBUG: ${ELASTIC_APM_DEBUG:?err}
+      ELASTIC_APM_ENVIRONMENT: prod 
+    # ports:
+    #   - 0:8000
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: setinc-prod
+        awslogs-region: ap-southeast-2
+        awslogs-stream-prefix: worker-prod

@@ -1,0 +1,42 @@
+# version: '3.8'
+
+services:
+  postgres:
+    image: postgres:latest
+    restart: always
+    container_name: "${CONTAINER_NAME}_postgres"
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_DB: ${DB_DATABASE}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - setinc_net
+
+  website:
+    build:
+      context: .
+      args:
+        - no-cache
+    container_name: "${CONTAINER_NAME}_webapp"
+    restart: always
+    env_file: .env
+    volumes:
+      - .:/src  # This mounts your local project code into the container
+      # You can add a pip cache volume here if needed:
+      # - pip_cache:/root/.cache/pip
+    ports:
+      - "${CONTAINER_OUT_PORT}:8000"
+    networks:
+      - setinc_net
+    depends_on:
+      - postgres
+
+networks:
+  setinc_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  # pip_cache:
