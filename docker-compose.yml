@@ -33,6 +33,20 @@ services:
     depends_on:
       - postgres
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: always
+    container_name: "${CONTAINER_NAME}_pgadmin"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "5050:80"  # You can access pgAdmin at http://localhost:5050
+    depends_on:
+      - postgres
+    networks:
+      - setinc_net    
+
 networks:
   setinc_net:
     driver: bridge
