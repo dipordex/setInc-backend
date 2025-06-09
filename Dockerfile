@@ -34,6 +34,7 @@ RUN apt-get purge -y gcc g++ \
 # Install Gunicorn (ensure it's listed in requirements.txt if you prefer)
 RUN pip install --no-cache-dir gunicorn
 
+RUN pip install PyYAML
 # Copy application source
 COPY . .
 

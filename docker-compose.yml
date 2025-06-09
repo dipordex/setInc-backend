@@ -46,11 +46,23 @@ services:
       - postgres
     networks:
       - setinc_net    
-
+  redis:
+    image: redis:latest
+    restart: always
+    container_name: "${CONTAINER_NAME}_redis"
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf  # Custom config
+      - redis_data:/data                               # Persistent Redis data
+    ports:
+      - "6379:6379"
+    networks:
+      - setinc_net
 networks:
   setinc_net:
     driver: bridge
 
 volumes:
   postgres_data:
+  redis_data:
   # pip_cache:

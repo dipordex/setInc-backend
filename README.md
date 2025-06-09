@@ -10,3 +10,9 @@
 ```
 docker compose --env-file .env -f docker-compose.yml up --build
 ```
+
+# To gernate Swagger 
+
+```py
+python manage.py generate_openapi_schema
+```

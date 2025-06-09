@@ -14,7 +14,7 @@ schema_view = get_schema_view(
         license=openapi.License(name="BSD License"),
     ),
     public=True,
-    permission_classes=(permissions.AllowAny,),
+    permission_classes=(permissions.AllowAny,),  # <--- Allow all users
 )
 
 urlpatterns = [
@@ -23,8 +23,9 @@ urlpatterns = [
     path('api/', include(('api.urls', 'api'))),
     path('api/task-tracked-time/', include(('task.urls', 'task'))),
     path('api/alarm/', include(('alarm.urls', 'alarm'))),
-    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='swagger'),
-    # path('accounts/', include('django.contrib.auth.urls')),
+   path('swagger.<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
+   path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+   path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),    path('accounts/', include('django.contrib.auth.urls')),
 ]
 
 if settings.MEDIA_URL and settings.MEDIA_ROOT:
