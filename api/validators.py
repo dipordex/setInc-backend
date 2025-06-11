@@ -128,14 +128,20 @@ def validate_date_and_time(time_zone: str, date: datetime.date,
         ValidationError: If the date is in the past, or end_time is not greater than start_time.
     """
     tz = pytz.timezone(time_zone)
-    now = timezone.now().astimezone(tz) if start_time else timezone.now().astimezone(tz).replace(hour=00, minute=00,
-                                                                                                 second=00,
-                                                                                                 microsecond=00)
-    # Convert the given date and times into timezone-aware datetime objects for comparison
-    date_start = datetime.combine(date, start_time if start_time else time.min, tzinfo=tz)
-    date_end = datetime.combine(date, end_time if end_time else time.max, tzinfo=tz)
+    now = timezone.now().astimezone(tz) if start_time else timezone.now().astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # Check if the date (and optionally time) is in the past
+    # print("time_zone:", tz)
+    # print("now:", now)
+
+# Properly localize datetime
+    date_start_naive = datetime.combine(date, start_time if start_time else time.min)
+    date_end_naive = datetime.combine(date, end_time if end_time else time.max)
+
+    date_start = tz.localize(date_start_naive)
+    date_end = tz.localize(date_end_naive)
+
+    # print("date_start:", date_start)
+
     if date_start < now:
         raise ValidationError({"error": ErrorMessages.DATE_IN_PAST})
 

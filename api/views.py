@@ -239,11 +239,16 @@ class TasksListByDateAPI(generics.GenericAPIView):
     def get(self, request, date: str):
         try:
             date = datetime.strptime(date, "%Y-%m-%d").date()
+            print(f"Requested date: {date}")
         except ValueError:
             return Response(ErrorMessages.INCORRECT_DATE_FORMAT, status=status.HTTP_400_BAD_REQUEST)
         user_tasks = self.get_queryset().filter(user=request.user)
+
+        print(f"User tasks count: {user_tasks}")
         tasks_on_date = user_tasks.filter(date=date)
+        print(f"Tasks on date {date}: {tasks_on_date.count()}")
         serializer = self.get_serializer(tasks_on_date, many=True)
+        print(f"sql query :{Task.objects.filter(user=request.user, date=date).query}")
 
         result = {
             'tasks': serializer.data,
@@ -299,14 +304,30 @@ class DefaultAlarmAPI(generics.GenericAPIView):
 class TaskProgressChartsAPI(APIView):
     def get(self, request):
         try:
+            current_date = datetime.now(get_timezone(request.user.timezone))
+            curr_year, curr_month = current_date.year, current_date.month
+            prev_year, prev_month = (curr_year - 1, 12) if curr_month == 1 else (curr_year, curr_month - 1)
+
             task_service = TaskProgressChartsService(request.user)
+            progress_weekly = task_service.get_task_progress(task_service.get_today())
+            # 
+            # Get today's date in user's timezone
+            print(task_service)        
             return Response({
-                'task_progress_today': task_service.task_progress_today(),
-                'progress_chart': task_service.get_task_progress(task_service.get_today()),
-                'quotes': QuotesSerializer(Quote.objects.order_by('?')[:3], many=True).data,
-                'upcoming_task': task_service.get_upcoming_task(),
-            }, status=status.HTTP_200_OK)
+        'task_progress_today': task_service.task_progress_today(),
+        'progress_chart': {
+            'current_week': progress_weekly['current_week'],
+            'last_week': progress_weekly['last_week'],
+            'current_month_weekly': task_service.calculate_monthly_week_progress(curr_year, curr_month),
+            'previous_month_weekly': task_service.calculate_monthly_week_progress(prev_year, prev_month),
+            'current_month': task_service.calculate_daily_progress_for_month(curr_year, curr_month),
+            'previous_month': task_service.calculate_daily_progress_for_month(prev_year, prev_month),
+        },
+        'quotes': QuotesSerializer(Quote.objects.order_by('?')[:3], many=True).data,
+        'upcoming_task': task_service.get_upcoming_task(),
+}, status=status.HTTP_200_OK)
         except Exception as e:
+            print(f"Error in TaskProgressChartsAPI: {e}")
             logger.error(ErrorMessages.TASK_TIME_ZONE_ERROR.format(e), exc_info=True)
             return Response({'error': str(ErrorMessages.SOMETHING_WENT_WRONG)},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
