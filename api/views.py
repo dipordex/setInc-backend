@@ -37,10 +37,11 @@ from .tasks import schedule_task_notification, get_timezone
 from .constants import STOPWATCH_LAPS
 from services.task_progress_charts import TaskProgressChartsService
 from .validators import user_friendly_timezone_to_iana, validate_date_and_time
-from .models import User, VerificationCode, Task, TaskCategory, DefaultAlarm, Quote, Stopwatch, Lap, Receipt
-from .serializers import PhoneNumberSerializer, PhoneNumberAndCodeSerializer, UserSerializer, TaskSerializer, \
+from .models import Notes, User, VerificationCode, Task, TaskCategory, DefaultAlarm, Quote, Stopwatch, Lap, Receipt
+from .serializers import NotesSerializer, PhoneNumberSerializer, PhoneNumberAndCodeSerializer, UserSerializer, TaskSerializer, \
     TaskCategoriesSerializer, DefaultAlarmSerializer, QuotesSerializer, FCMTokenSerializer, \
     TaskNamesListSerializer, StopwatchSerializer, LapSerializer, ReceiptSerializer
+from rest_framework.permissions import BasePermission
 
 logger = logging.getLogger(__name__)
 
@@ -703,3 +704,55 @@ class ReceiptViewSet(CreateModelMixin, GenericViewSet):
                 print(str(e), "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                 return Response(data={'detail': f'Purchase validation failed {e}'},
                                 status=status.HTTP_400_BAD_REQUEST)
+
+
+# notes
+
+class IsNoteOwner(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return obj.user == request.user
+
+class NotesAPI(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated, IsNoteOwner]
+    serializer_class = NotesSerializer
+
+    def get_queryset(self):
+        return Notes.objects.filter(user=self.request.user, isDelete='false')
+
+    def get_object(self):
+        obj = Notes.objects.get(pk=self.kwargs['pk'])
+        self.check_object_permissions(self.request, obj)
+        return obj
+
+    def get(self, request, pk):
+        note = self.get_object()
+        return Response(self.get_serializer(note).data)
+
+    def patch(self, request, pk):
+        note = self.get_object()
+        serializer = self.get_serializer(note, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        note = self.get_object()
+        serializer = self.get_serializer(note, data={'isDelete': 'true'}, partial=True)
+    
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Note soft-deleted via serializer."}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class NotesListCreateAPI(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = NotesSerializer
+
+    def get_queryset(self):
+        return Notes.objects.filter(user=self.request.user, isDelete='false')
+
+    def perform_create(self, serializer):
+        expiry_date = timezone.now().date() + timedelta(days=7)
+        print(f"Expiry date for the note: {expiry_date}")
+        serializer.save(user=self.request.user, isDelete='false', expiry_date=expiry_date)
