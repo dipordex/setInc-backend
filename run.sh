@@ -10,5 +10,11 @@ python3 manage.py migrate
 # python3 manage.py loaddata fixture.yaml
 python3 manage.py collectstatic --noinput
 
-# Run server
-gunicorn --workers 3 --timeout 600 --bind 0.0.0.0:8000 setinc.wsgi:application
+
+# Run with ASGI for Socket.IO support
+# START WITH UVICORN INSTEAD OF GUNICORN
+exec uvicorn setinc.asgi:application \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers 1 \
+    --timeout-keep-alive 60
