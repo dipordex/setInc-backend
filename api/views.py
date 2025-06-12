@@ -307,7 +307,8 @@ class TaskProgressChartsAPI(APIView):
             current_date = datetime.now(get_timezone(request.user.timezone))
             curr_year, curr_month = current_date.year, current_date.month
             prev_year, prev_month = (curr_year - 1, 12) if curr_month == 1 else (curr_year, curr_month - 1)
-
+            print(f"Current date: {current_date}, Current year: {curr_year}, Current month: {curr_month}")
+            print(f"Previous year: {prev_year}, Previous month: {prev_month}")        
             task_service = TaskProgressChartsService(request.user)
             progress_weekly = task_service.get_task_progress(task_service.get_today())
             # 
@@ -320,8 +321,10 @@ class TaskProgressChartsAPI(APIView):
             'last_week': progress_weekly['last_week'],
             'current_month_weekly': task_service.calculate_monthly_week_progress(curr_year, curr_month),
             'previous_month_weekly': task_service.calculate_monthly_week_progress(prev_year, prev_month),
-            'current_month': task_service.calculate_daily_progress_for_month(curr_year, curr_month),
-            'previous_month': task_service.calculate_daily_progress_for_month(prev_year, prev_month),
+            'current_month': task_service.calculate_monthly_average(curr_year, curr_month),
+            'previous_month': task_service.calculate_monthly_average(prev_year, prev_month),
+            'current_year': task_service.calculate_yearly_average_by_month(curr_year),
+            'previous_year': task_service.calculate_yearly_average_by_month(prev_year - 1),
         },
         'quotes': QuotesSerializer(Quote.objects.order_by('?')[:3], many=True).data,
         'upcoming_task': task_service.get_upcoming_task(),

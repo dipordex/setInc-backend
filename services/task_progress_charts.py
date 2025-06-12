@@ -11,6 +11,8 @@ from api.utils import get_start_of_week, beautify_duration
 from calendar import monthrange
 from typing import Dict, Optional, List
 from datetime import date, timedelta
+import calendar
+
 class TaskProgressChartsService(UserTaskRepository):
     """
     Service class to calculate and provide task progress charts and related data.
@@ -139,23 +141,29 @@ class TaskProgressChartsService(UserTaskRepository):
         return weeks
 
 
-    def calculate_daily_progress_for_month(self, year: int, month: int) -> Dict[str, float]:
+    def calculate_monthly_average(self, year: int, month: int) -> float:
         """
-        Calculates daily task completion percentages for a given month.
+        Calculates the average task completion percentage for a specific month.
         """
         num_days = monthrange(year, month)[1]
-        progress = {}
+        total_percent = 0
+        valid_days = 0
+
         for day in range(1, num_days + 1):
-            date = datetime(year, month, day).date()
-            daily_tasks = self.get_tasks_for_user_for_today(self.get_tasks_for_user(self.user), date)
+            date_obj = datetime(year, month, day).date()
+            daily_tasks = self.get_tasks_for_user_for_today(self.get_tasks_for_user(self.user), date_obj)
             total = daily_tasks.count()
             completed = daily_tasks.filter(done=True).count()
-            progress[date.strftime("%Y-%m-%d")] = round((completed / total * 100), 2) if total else 0
-        return progress
+
+            if total:
+                total_percent += (completed / total) * 100
+                valid_days += 1
+
+        return round(total_percent / valid_days, 2) if valid_days else 0.0
     def calculate_monthly_week_progress(self, year: int, month: int) -> Dict[str, float]:
         """
         Calculates average weekly task progress for each week of a given month.
-    
+
         Returns:
         {
             "Week 1": 75.0,
@@ -165,29 +173,63 @@ class TaskProgressChartsService(UserTaskRepository):
         """
         weekly_progress = {}
         weeks = self.get_weeks_in_month(year, month)
-    
+
         for i, week_start in enumerate(weeks, start=1):
             total_percent = 0
             valid_days = 0
-    
+
             for day_offset in range(7):
                 date = week_start + timedelta(days=day_offset)
                 if date.month != month:
                     continue  # skip days outside the target month
-                
+
                 tasks = self.get_tasks_for_user_for_today(self.get_tasks_for_user(self.user), date)
                 total = tasks.count()
                 completed = tasks.filter(done=True).count()
-    
+
                 if total:
                     percent = (completed / total) * 100
                     total_percent += percent
                     valid_days += 1
-    
+
             weekly_avg = round(total_percent / valid_days, 2) if valid_days else 0
             weekly_progress[f"Week {i}"] = weekly_avg
-    
+
         return weekly_progress
-    
-    
-    
+
+
+    def calculate_yearly_average_by_month(self, year: int) -> Dict[str, float]:
+        """
+        Calculates the average task completion percentage for each month of the year.
+
+        Returns:
+            {
+                "Jan": 72.5,
+                "Feb": 65.0,
+                ...
+            }
+        """
+        monthly_averages = {}
+
+        for month in range(1, 13):
+            days_in_month = monthrange(year, month)[1]
+            total_percent = 0
+            valid_days = 0
+
+            for day in range(1, days_in_month + 1):
+                date_obj = datetime(year, month, day).date()
+                daily_tasks = self.get_tasks_for_user_for_today(
+                    self.get_tasks_for_user(self.user), date_obj
+                )
+                total = daily_tasks.count()
+                completed = daily_tasks.filter(done=True).count()
+
+                if total:
+                    total_percent += (completed / total) * 100
+                    valid_days += 1
+
+            month_name = calendar.month_abbr[month]  # 'Jan', 'Feb', ...
+            monthly_averages[month_name] = round(total_percent / valid_days, 2) if valid_days else 0.0
+
+        return monthly_averages
+
