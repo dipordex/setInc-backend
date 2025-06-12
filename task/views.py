@@ -36,6 +36,9 @@ class TaskTrackedTimeDetailView(APIView):
         Retrieve and return the tracked time for the specified task.
         """
         try:
+            task = self.get_object()
+            if not task:
+                return Response({"error": "No active tracked task found."}, status=404)
             serializer = TaskTrackedTimeSerializer(self.get_object())
             return Response(serializer.data)
         except Task.DoesNotExist:
