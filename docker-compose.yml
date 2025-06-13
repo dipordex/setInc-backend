@@ -65,4 +65,5 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  # - ./log:/app/log  # Ensure the local log folder exists and is not empty
   # pip_cache:
