@@ -12,6 +12,8 @@ from api.models import Task
 from .permissions import IsTaskOwner
 from .serializers import TaskTrackedTimeSerializer
 from api.tasks import schedule_task_duration, remove_scheduled_job, send_task_duration_reminder_notification
+from socket_instance import sio
+from asgiref.sync import async_to_sync
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,16 @@ class StartTaskTracker(APIView):
         if task.start_tracked_time is None:
             task.start_tracked_time = timezone.now()
             task.save()
+         # Emit socket.io event to all of user's connected devices
+            async_to_sync(sio.emit)(
+                'task_started',
+                {
+                    'task_id': task.id,
+                    'message': 'Task tracking started',
+                    'start_time': task.start_tracked_time.isoformat()
+                },
+                room=str(request.user.id)
+            )
             if task.send_notification:
                 schedule_task_duration.send_with_options(args=(task.id,))
             return Response(SuccessMessages.TASK_TRACKING_STARTED, status=status.HTTP_200_OK)
@@ -93,6 +105,16 @@ class StopTaskTracker(APIView):
             task.tracked_time += timezone.now() - task.start_tracked_time
             task.start_tracked_time = None
             task.save()
+          # Emit socket.io event to all of user's connected devices
+            async_to_sync(sio.emit)(
+                'task_stopped',
+                {
+                    'task_id': task.id,
+                    'message': 'Task tracking stopped',
+                    # 'duration': str(tracked_duration)
+                },
+                room=str(request.user.id)
+            )
             remove_scheduled_job.send_with_options(args=(task.pk,  send_task_duration_reminder_notification.__name__))
             return Response(SuccessMessages.TASK_TRACKING_STOPPED, status=status.HTTP_200_OK)
         return Response(ErrorMessages.TASK_START_ERROR, status=status.HTTP_400_BAD_REQUEST)
