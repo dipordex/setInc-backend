@@ -14,9 +14,7 @@ SECRET_KEY = environ.get('SECRET_KEY',
 DEBUG = environ.get('DEBUG', False)
 THUMBNAIL_DEBUG = DEBUG
 
-ALLOWED_HOSTS = [
-    environ.get('DOMAIN', '*')
-]
+ALLOWED_HOSTS = [ '*']
 
 DATABASES = {
     'default': {

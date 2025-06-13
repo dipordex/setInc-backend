@@ -37,6 +37,7 @@ class TaskTrackedTimeDetailView(APIView):
         """
         try:
             serializer = TaskTrackedTimeSerializer(self.get_object())
+            print("api hit of get track time", serializer.data)
             return Response(serializer.data)
         except Task.DoesNotExist:
             return Response(ErrorMessages.STARTED_TASK_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
@@ -68,19 +69,20 @@ class StartTaskTracker(APIView):
         if task.start_tracked_time is None:
             task.start_tracked_time = timezone.now()
             task.save()
-         # Emit socket.io event to all of user's connected devices
-            async_to_sync(sio.emit)(
-                'task_started',
-                {
-                    'task_id': task.id,
-                    'message': 'Task tracking started',
-                    'start_time': task.start_tracked_time.isoformat()
-                },
-                room=str(request.user.id)
-            )
-            if task.send_notification:
-                schedule_task_duration.send_with_options(args=(task.id,))
-            return Response(SuccessMessages.TASK_TRACKING_STARTED, status=status.HTTP_200_OK)
+
+        serializer = TaskTrackedTimeSerializer(task)
+
+        # Emit socket.io event to all of user's connected devices
+        async_to_sync(sio.emit)(
+            'task_started',
+            serializer.data,
+            room=str(request.user.id)
+        )
+
+        if task.send_notification:
+            schedule_task_duration.send_with_options(args=(task.id,))
+
+        return Response(SuccessMessages.TASK_TRACKING_STARTED, status=status.HTTP_200_OK)
 
 
 class StopTaskTracker(APIView):
