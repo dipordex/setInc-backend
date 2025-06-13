@@ -36,6 +36,8 @@ urlpatterns = [
 
     path('token/refresh/', TokenRefreshView.as_view(),
          name='token_refresh'),
+    path('notes/', NotesListCreateAPI.as_view(), name='notes-list-create'),
+    path('notes/<int:pk>/', NotesAPI.as_view(), name='notes-detail'),
 ]
 
 router = DefaultRouter(trailing_slash=False)
