@@ -1,4 +1,5 @@
 # Python standard library imports
+import os
 import pytz
 import random
 import logging
@@ -24,6 +25,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import generics, status, permissions
 from inapppy import errors, InAppPyValidationError, AppStoreValidator, GooglePlayVerifier
+from django.db.models import Count
 
 # Local application imports
 from . import api_docs, constants
@@ -41,8 +43,15 @@ from .models import User, VerificationCode, Task, TaskCategory, DefaultAlarm, Qu
 from .serializers import PhoneNumberSerializer, PhoneNumberAndCodeSerializer, UserSerializer, TaskSerializer, \
     TaskCategoriesSerializer, DefaultAlarmSerializer, QuotesSerializer, FCMTokenSerializer, \
     TaskNamesListSerializer, StopwatchSerializer, LapSerializer, ReceiptSerializer
-
+from xhtml2pdf import pisa
+from io import BytesIO
+from html2image import Html2Image
+from .models import Stopwatch
+from .serializers import StopwatchSerializer
 logger = logging.getLogger(__name__)
+from django.template.loader import get_template
+from rest_framework.permissions import AllowAny
+from django.utils.dateparse import parse_datetime
 
 UserModel = get_user_model()
 
@@ -540,14 +549,41 @@ class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView,
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Stopwatch.objects.none()
+    
+        base_queryset = Stopwatch.objects.annotate(lap_count=Count("lap_count"))
+    
         if check_subscription(self.request):
-            return Stopwatch.objects.filter(user=self.request.user)
-        return Stopwatch.objects.filter(user=self.request.user)[:constants.COUNT_UNSUBSCRIBED_STOPWATCHES]
+            return base_queryset.filter(user=self.request.user)
+        
+        return base_queryset.filter(user=self.request.user)[:constants.COUNT_UNSUBSCRIBED_STOPWATCHES]
+    def delete(self, request, pk=None):
+        if pk:
+            # Delete/reset a specific stopwatch by ID
+            stopwatch = get_object_or_404(Stopwatch, pk=pk, user=request.user)
+            stopwatch.status = "notStarted"  # Or "reset" if allowed
+            stopwatch.stopped_time = None
+            stopwatch.save()
+            stopwatch.laps.all().delete()
+            return Response(
+                {"message": f"Stopwatch {pk} has been reset and its laps deleted."},
+                status=status.HTTP_200_OK
+            )
 
-    def delete(self, request, *args, **kwargs):
-        queryset = Stopwatch.objects.filter(user=self.request.user)
-        queryset.delete()
-        return Response(status=status.HTTP_200_OK)
+    # Bulk delete/reset all stopwatches for the user
+        stopwatches = Stopwatch.objects.filter(user=request.user)
+        count = 0
+        for stopwatch in stopwatches:
+            stopwatch.status = "notStarted"
+            stopwatch.stopped_time = None
+            stopwatch.save()
+            stopwatch.laps.all().delete()
+            count += 1
+
+            return Response(
+            {"message": f"{count} stopwatch(es) have been reset and laps deleted."},
+            status=status.HTTP_200_OK
+    )
+
 
 
 class StopwatchEditAPI(generics.UpdateAPIView):
@@ -679,3 +715,108 @@ class ReceiptViewSet(CreateModelMixin, GenericViewSet):
                 print(str(e), "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                 return Response(data={'detail': f'Purchase validation failed {e}'},
                                 status=status.HTTP_400_BAD_REQUEST)
+    
+
+class PublicStopwatchAPI(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            uuid = request.GET.get("uuid")
+            as_pdf = request.GET.get("pdf") == "true"
+            as_image = request.GET.get("image") == "true"
+
+            if not uuid:
+                return Response(
+                    {"detail": "Missing uuid parameter"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            stopwatch = get_object_or_404(Stopwatch, public_uuid=uuid)
+            serializer = StopwatchSerializer(stopwatch)
+
+            base_path = os.path.join(settings.MEDIA_ROOT, "public", "stopwatch", str(uuid))
+            os.makedirs(base_path, exist_ok=True)
+
+            response_data = {
+                "detail": "Stopwatch fetched successfully",
+                "stopwatch": serializer.data,
+            }
+
+            # Generate PDF
+            if as_pdf:
+                pdf_template = get_template("stopwatch_pdf.html")
+                html = pdf_template.render({"stopwatch": stopwatch})
+                pdf_path = os.path.join(base_path, f"{uuid}.pdf")
+                with open(pdf_path, "wb") as pdf_file:
+                    pisa.CreatePDF(BytesIO(html.encode("utf-8")), dest=pdf_file)
+                response_data["pdf_url"] = f"/media/public/stopwatch/{uuid}/{uuid}.pdf"
+
+            # Generate Image
+            if as_image:
+                hti = Html2Image()
+                html = get_template("stopwatch_pdf.html").render({"stopwatch": stopwatch})
+                image_filename = f"{uuid}.png"
+                image_path = os.path.join(base_path, image_filename)
+                hti.screenshot(html_str=html, save_as=image_filename, size=(800, 600), output_path=base_path)
+                response_data["image_url"] = f"/media/public/stopwatch/{uuid}/{uuid}.png"
+
+            return Response(data=response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(str(e), "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            return Response(
+                data={"detail": f"Failed to fetch public stopwatch: {e}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+class StartStopwatchAPI(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request, pk):
+        try:
+            stopwatch = Stopwatch.objects.get(pk=pk, user=request.user)
+        except Stopwatch.DoesNotExist:
+            return Response({"detail": "Stopwatch not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if stopwatch.status == "started":
+            return Response({"detail": "Stopwatch already started."}, status=status.HTTP_400_BAD_REQUEST)
+
+        stopwatch.status = "started"
+        stopwatch.stopped_time = None
+        stopwatch.save()
+
+        return Response({
+            "message": "Stopwatch started",
+            "status": stopwatch.status,
+            "stopped_time": stopwatch.stopped_time
+        })
+
+
+class StopStopwatchAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            stopwatch = Stopwatch.objects.get(pk=pk, user=request.user)
+        except Stopwatch.DoesNotExist:
+            return Response({"detail": "Stopwatch not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if stopwatch.status != "started":
+            return Response({"detail": "Stopwatch is not running."}, status=status.HTTP_400_BAD_REQUEST)
+
+        stopped_time_str = request.data.get("stopped_time")
+        if not stopped_time_str:
+            return Response({"detail": "Missing 'stopped_time' in request body."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # stopped_time = (stopped_time_str)
+        if not stopped_time_str:
+            return Response({"detail": "Invalid datetime format for 'stopped_time'. Use ISO format."}, status=status.HTTP_400_BAD_REQUEST)
+
+        stopwatch.status = "stopped"
+        stopwatch.stopped_time = stopped_time_str
+        stopwatch.save()
+
+        return Response({
+            "message": "Stopwatch stopped",
+            "status": stopwatch.status,
+            "stopped_time": stopwatch.stopped_time
+        })
