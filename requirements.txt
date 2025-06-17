@@ -32,4 +32,4 @@ uvicorn[standard]==0.18.3
 django-redis==4.12.1
 python-socketio[asgi]
 xhtml2pdf
-html2image
+html2image==1.1.0

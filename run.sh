@@ -14,9 +14,9 @@
 
 # python retrieve_google_keys.py
 
-python3 manage.py migrate
+python manage.py migrate
 # python3 manage.py loaddata fixture.yaml
-python3 manage.py collectstatic --noinput
+python manage.py collectstatic --noinput
 
 
 # Run with ASGI for Socket.IO support

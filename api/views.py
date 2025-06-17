@@ -563,12 +563,12 @@ class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView,
         if pk:
             # Delete/reset a specific stopwatch by ID
             stopwatch = get_object_or_404(Stopwatch, pk=pk, user=request.user)
-            stopwatch.status = "notStarted"  # Or "reset" if allowed
-            stopwatch.stopped_time = None
-            stopwatch.save()
+            # stopwatch.status = "notStarted"  # Or "reset" if allowed
+            # stopwatch.stopped_time = None
+            stopwatch.delete()
             stopwatch.laps.all().delete()
             return Response(
-                {"message": f"Stopwatch {pk} has been reset and its laps deleted."},
+                {"message": f"Stopwatch {pk} has been deleted and its laps deleted."},
                 status=status.HTTP_200_OK
             )
 
