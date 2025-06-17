@@ -52,6 +52,9 @@ logger = logging.getLogger(__name__)
 from django.template.loader import get_template
 from rest_framework.permissions import AllowAny
 from django.utils.dateparse import parse_datetime
+from django.utils.timezone import now
+from socket_instance import sio
+from rest_framework import status as http_status
 
 UserModel = get_user_model()
 
@@ -550,7 +553,7 @@ class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView,
         if getattr(self, "swagger_fake_view", False):
             return Stopwatch.objects.none()
     
-        base_queryset = Stopwatch.objects.annotate(lap_count=Count("lap_count"))
+        base_queryset = Stopwatch.objects.annotate(lap_count=Count("laps"))
     
         if check_subscription(self.request):
             return base_queryset.filter(user=self.request.user)
@@ -769,54 +772,61 @@ class PublicStopwatchAPI(APIView):
                 data={"detail": f"Failed to fetch public stopwatch: {e}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-class StartStopwatchAPI(APIView):
-    permission_classes = [IsAuthenticated]
-    def post(self, request, pk):
-        try:
-            stopwatch = Stopwatch.objects.get(pk=pk, user=request.user)
-        except Stopwatch.DoesNotExist:
-            return Response({"detail": "Stopwatch not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if stopwatch.status == "started":
-            return Response({"detail": "Stopwatch already started."}, status=status.HTTP_400_BAD_REQUEST)
-
-        stopwatch.status = "started"
-        stopwatch.stopped_time = None
-        stopwatch.save()
-
-        return Response({
-            "message": "Stopwatch started",
-            "status": stopwatch.status,
-            "stopped_time": stopwatch.stopped_time
-        })
-
-
-class StopStopwatchAPI(APIView):
+class StopwatchActionAPI(APIView):
+    """
+    Unified endpoint to start, stop, or reset a stopwatch.
+    Use query param: ?status=start|stop|reset
+    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
+        action = request.query_params.get('status')
+
+        if action not in ["start", "stop", "reset"]:
+            return Response({"detail": "Invalid status. Use start, stop, or reset."}, status=http_status.HTTP_400_BAD_REQUEST)
+
         try:
             stopwatch = Stopwatch.objects.get(pk=pk, user=request.user)
         except Stopwatch.DoesNotExist:
-            return Response({"detail": "Stopwatch not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Stopwatch not found."}, status=http_status.HTTP_404_NOT_FOUND)
 
-        if stopwatch.status != "started":
-            return Response({"detail": "Stopwatch is not running."}, status=status.HTTP_400_BAD_REQUEST)
+        message = ""
+        if action == "start":
+            if stopwatch.status == "started":
+                return Response({"detail": "Stopwatch already started."}, status=http_status.HTTP_400_BAD_REQUEST)
 
-        stopped_time_str = request.data.get("stopped_time")
-        if not stopped_time_str:
-            return Response({"detail": "Missing 'stopped_time' in request body."}, status=status.HTTP_400_BAD_REQUEST)
+            stopwatch.status = "started"
+            stopwatch.stopped_time = None
+            stopwatch.start_time = now()  # Set start time when starting
+            message = "Stopwatch started"
 
-        # stopped_time = (stopped_time_str)
-        if not stopped_time_str:
-            return Response({"detail": "Invalid datetime format for 'stopped_time'. Use ISO format."}, status=status.HTTP_400_BAD_REQUEST)
+        elif action == "stop":
+            if stopwatch.status != "started":
+                return Response({"detail": "Stopwatch is not running."}, status=http_status.HTTP_400_BAD_REQUEST)
 
-        stopwatch.status = "stopped"
-        stopwatch.stopped_time = stopped_time_str
+            stopwatch.status = "stopped"
+            stopwatch.stopped_time = now()
+            message = "Stopwatch stopped"
+
+        elif action == "reset":
+            stopwatch.status = "reset"
+            stopwatch.stopped_time = None
+            stopwatch.start_time = None  # optional: also clear `start_time`
+            message = "Stopwatch reset"
+
         stopwatch.save()
 
-        return Response({
-            "message": "Stopwatch stopped",
+        # Emit over socket.io
+        sio.emit("stopwatch_status", {
+            "id": stopwatch.id,
             "status": stopwatch.status,
-            "stopped_time": stopwatch.stopped_time
+            "message": message
         })
+
+        return Response({
+            "id": stopwatch.id,
+            "message": message,
+            "status": stopwatch.status,
+            "stopped_time": stopwatch.stopped_time,
+        }, status=http_status.HTTP_200_OK)
