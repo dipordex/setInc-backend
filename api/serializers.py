@@ -9,6 +9,8 @@ from rest_framework.serializers import ValidationError
 from .models import User, Task, TaskCategory, DefaultAlarm, Quote, Stopwatch, Lap, Receipt
 
 from .validators import PhoneNumberValidation
+from django.utils.timezone import localtime
+import pytz
 
 UserModel = get_user_model()
 
@@ -112,6 +114,10 @@ class FCMTokenSerializer(serializers.Serializer):
 
 class StopwatchSerializer(serializers.ModelSerializer):
     laps = serializers.SerializerMethodField(read_only=True)
+    time_diff_sec = serializers.IntegerField(read_only=True)
+    start_time_local = serializers.SerializerMethodField()
+    stopped_time_local = serializers.SerializerMethodField()
+    date_time_local = serializers.SerializerMethodField()
 
     class Meta:
         model = Stopwatch
@@ -139,6 +145,27 @@ class StopwatchSerializer(serializers.ModelSerializer):
 
     def get_laps(self, obj):
         return obj.laps.count()
+    def get_timezone(self):
+        request = self.context.get("request")
+        tz_str = request.headers.get("X-Timezone", "Asia/Kolkata")  # ⬅️ or get from user profile
+        try:
+            return pytz.timezone(tz_str)
+        except Exception:
+            return pytz.UTC
+
+    def to_local(self, dt):
+        if dt:
+            return localtime(dt, timezone=self.get_timezone()).isoformat()
+        return None
+
+    def get_start_time_local(self, obj):
+        return self.to_local(obj.start_time)
+
+    def get_stopped_time_local(self, obj):
+        return self.to_local(obj.stopped_time)
+
+    def get_date_time_local(self, obj):
+        return self.to_local(obj.date_time)
 
 
 class LapSerializer(serializers.ModelSerializer):

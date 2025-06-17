@@ -55,6 +55,11 @@ from django.utils.dateparse import parse_datetime
 from django.utils.timezone import now
 from socket_instance import sio
 from rest_framework import status as http_status
+from django.db.models import (
+    Count, ExpressionWrapper, F, DurationField, Case, When, Value, IntegerField
+)
+from django.db.models.functions import Now, ExtractDay, ExtractHour, ExtractMinute, ExtractSecond
+
 
 UserModel = get_user_model()
 
@@ -552,13 +557,48 @@ class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView,
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Stopwatch.objects.none()
-    
-        base_queryset = Stopwatch.objects.annotate(lap_count=Count("laps"))
-    
+
+        full_elapsed = Case(
+            When(
+                status=Stopwatch.STATUS_STARTED,
+                start_time__isnull=False,
+                then=ExpressionWrapper(
+                    F("pre_time_diff") + (Now() - F("start_time")),
+                    output_field=DurationField()
+                )
+            ),
+            When(
+                status=Stopwatch.STATUS_STOPPED,
+                then=F("pre_time_diff")
+            ),
+            default=Value(None),
+            output_field=DurationField()
+        )
+
+        base_queryset = Stopwatch.objects.annotate(
+            lap_count=Count("laps"),
+            raw_time_diff=full_elapsed,
+        ).annotate(
+            time_diff_sec=Case(
+                When(
+                    raw_time_diff__isnull=False,
+                    then=(
+                        ExtractDay("raw_time_diff") * 86400 +
+                        ExtractHour("raw_time_diff") * 3600 +
+                        ExtractMinute("raw_time_diff") * 60 +
+                        ExtractSecond("raw_time_diff")
+                    )
+                ),
+                default=Value(None),
+                output_field=IntegerField()
+            )
+        )
+        print("Base Queryset:", base_queryset.query)
         if check_subscription(self.request):
             return base_queryset.filter(user=self.request.user)
-        
+
         return base_queryset.filter(user=self.request.user)[:constants.COUNT_UNSUBSCRIBED_STOPWATCHES]
+
     def delete(self, request, pk=None):
         if pk:
             # Delete/reset a specific stopwatch by ID
@@ -797,7 +837,7 @@ class StopwatchActionAPI(APIView):
                 return Response({"detail": "Stopwatch already started."}, status=http_status.HTTP_400_BAD_REQUEST)
 
             stopwatch.status = "started"
-            stopwatch.stopped_time = None
+            # stopwatch.stopped_time = None
             stopwatch.start_time = now()  # Set start time when starting
             message = "Stopwatch started"
 
@@ -806,12 +846,20 @@ class StopwatchActionAPI(APIView):
                 return Response({"detail": "Stopwatch is not running."}, status=http_status.HTTP_400_BAD_REQUEST)
 
             stopwatch.status = "stopped"
-            stopwatch.stopped_time = now()
-            message = "Stopwatch stopped"
+            stopwatch.stopped_time = timezone.now()
+
+        # Save accumulated time
+            if stopwatch.start_time:
+                current_session = stopwatch.stopped_time - stopwatch.start_time
+                stopwatch.pre_time_diff = (stopwatch.pre_time_diff or timedelta()) + current_session
+                stopwatch.save()
+                message = "Stopwatch stopped"
 
         elif action == "reset":
             stopwatch.status = "reset"
             stopwatch.stopped_time = None
+            stopwatch.pre_time_diff = None
+            stopwatch.laps.all().delete()
             stopwatch.start_time = None  # optional: also clear `start_time`
             message = "Stopwatch reset"
 

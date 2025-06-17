@@ -133,13 +133,14 @@ LOGGING = {
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'Australia/Sydney'
+# TIME_ZONE = 'Australia/Sydney'
+TIME_ZONE = 'UTC'  # or 'Asia/Kolkata', but prefer UTC in DB
 
 USE_I18N = True
 
 USE_L10N = True
 
-USE_TZ = False
+USE_TZ = True
 
 SITE_ID = 1
 

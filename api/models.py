@@ -141,6 +141,8 @@ class Stopwatch(models.Model):
     public_uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     start_time = models.DateTimeField(null=True)
     stopped_time = models.DateTimeField(null=True)
+    pre_time_diff = models.DurationField(null=True, blank=True, default=timedelta)
+    
     STATUS_NOT_STARTED = 'not_started'
     STATUS_STARTED = 'started'
     STATUS_STOPPED = 'stopped'
