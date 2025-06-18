@@ -194,3 +194,17 @@ class Receipt(models.Model):
 
     def __str__(self):
         return f'{self.user.name}'
+from django.db import models
+from django.conf import settings
+
+class Notes(models.Model):
+    class IsDeleteEnum(models.TextChoices):
+        TRUE = 'true', 'True'
+        FALSE = 'false', 'False'
+
+    isDelete = models.CharField(max_length=5, choices=IsDeleteEnum.choices, default=IsDeleteEnum.FALSE)
+    expiry_date = models.DateField(null=True, blank=True)
+    notes = models.TextField()
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notes')
+    createdAt = models.DateTimeField(auto_now_add=True)
+    updatedAt = models.DateTimeField(auto_now=True)

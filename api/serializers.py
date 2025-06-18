@@ -6,7 +6,7 @@ from rest_framework import serializers, status
 from . import constants
 from messages import ErrorMessages
 from rest_framework.serializers import ValidationError
-from .models import User, Task, TaskCategory, DefaultAlarm, Quote, Stopwatch, Lap, Receipt
+from .models import Notes, User, Task, TaskCategory, DefaultAlarm, Quote, Stopwatch, Lap, Receipt
 
 from .validators import PhoneNumberValidation
 from django.utils.timezone import localtime, now
@@ -38,7 +38,8 @@ class PhoneNumberAndCodeSerializer(serializers.Serializer):
         Validates that the verification code contains only digits.
         """
         if not value.isdigit():
-            raise serializers.ValidationError(ErrorMessages.VERIFICATION_CODE_ERROR)
+            raise serializers.ValidationError(
+                ErrorMessages.VERIFICATION_CODE_ERROR)
         return value
 
 
@@ -51,7 +52,8 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class TaskSerializer(serializers.ModelSerializer):
-    time_zone = serializers.CharField(required=True, max_length=50, min_length=2)
+    time_zone = serializers.CharField(
+        required=True, max_length=50, min_length=2)
     done = serializers.BooleanField(default=False)
 
     class Meta:
@@ -64,7 +66,8 @@ class TaskSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         # Ensure the category field is properly serialized
         self.fields['category'] = TaskCategoriesSerializer(read_only=True)
-        representation = super(TaskSerializer, self).to_representation(instance)
+        representation = super(
+            TaskSerializer, self).to_representation(instance)
 
         # Format the tracked_time field
         if 'tracked_time' in representation and instance.tracked_time:
@@ -73,7 +76,8 @@ class TaskSerializer(serializers.ModelSerializer):
                 total_seconds = int(instance.tracked_time.total_seconds())
                 hours, remainder = divmod(total_seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
-                representation['tracked_time'] = '{:02}:{:02}:{:02}'.format(hours, minutes, seconds)
+                representation['tracked_time'] = '{:02}:{:02}:{:02}'.format(
+                    hours, minutes, seconds)
             else:
                 representation['tracked_time'] = '00:00:00'
         return representation
@@ -193,9 +197,11 @@ class LapSerializer(serializers.ModelSerializer):
 
 
 class ReceiptSerializer(serializers.ModelSerializer):
-    os = serializers.ChoiceField(choices=(('apple', 'apple'), ('android', 'android')), required=True)
+    os = serializers.ChoiceField(
+        choices=(('apple', 'apple'), ('android', 'android')), required=True)
     receipt = serializers.CharField(required=False, help_text='Only for iOS')
-    signature = serializers.JSONField(required=False, help_text='Only for android')
+    signature = serializers.JSONField(
+        required=False, help_text='Only for android')
 
     class Meta:
         model = Receipt
@@ -207,3 +213,10 @@ class ReceiptSerializer(serializers.ModelSerializer):
         if attrs.get('os') == 'android' and not attrs.get('signature'):
             raise ValidationError('For Android signature is required.')
         return attrs
+
+
+class NotesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notes
+        fields = '__all__'
+        read_only_fields = ['id', 'user', 'createdAt', 'updatedAt']

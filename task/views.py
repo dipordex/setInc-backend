@@ -24,18 +24,23 @@ class TaskTrackedTimeDetailView(APIView):
     """
     tags = ['Tasks']
 
+    # def get_object(self):
+    #     """
+    #     Helper method to get the task object, and check if the user has the permission to view it.
+    #     """
+    #     # return Task.objects.get(user=self.request.user, start_tracked_time__isnull=False)
+    # 
     def get_object(self):
-        """
-        Helper method to get the task object, and check if the user has the permission to view it.
-        """
-        return Task.objects.get(user=self.request.user, start_tracked_time__isnull=False)
-
+        return Task.objects.filter(user=self.request.user, start_tracked_time__isnull=False).first()        
     @swagger_auto_schema(tags=['Tasks'], operation_description="Method to get tracked time")
     def get(self, request):
         """
         Retrieve and return the tracked time for the specified task.
         """
         try:
+            task = self.get_object()
+            if not task:
+                return Response({"error": "No active tracked task found."}, status=404)
             serializer = TaskTrackedTimeSerializer(self.get_object())
             print("api hit of get track time", serializer.data)
             return Response(serializer.data)
