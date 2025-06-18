@@ -48,6 +48,7 @@ INSTALLED_APPS = [
 
     'storages',
     'api',
+    'api.apps.ApiConfig',
     'rest_framework_simplejwt',
     'fcm_django',
     'task',

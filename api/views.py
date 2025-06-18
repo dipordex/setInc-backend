@@ -49,6 +49,7 @@ from html2image import Html2Image
 from .models import Stopwatch
 from .serializers import StopwatchSerializer
 from rest_framework.permissions import BasePermission
+from rest_framework.mixins import UpdateModelMixin
 
 logger = logging.getLogger(__name__)
 from django.template.loader import get_template
@@ -900,7 +901,7 @@ class IsNoteOwner(BasePermission):
     def has_object_permission(self, request, view, obj):
         return obj.user == request.user
 
-class NotesAPI(generics.GenericAPIView):
+class NotesAPI(UpdateModelMixin, generics.GenericAPIView):
     permission_classes = [IsAuthenticated, IsNoteOwner]
     serializer_class = NotesSerializer
 
@@ -908,22 +909,57 @@ class NotesAPI(generics.GenericAPIView):
         return Notes.objects.filter(user=self.request.user, isDelete='false')
 
     def get_object(self):
-        obj = Notes.objects.get(pk=self.kwargs['pk'])
-        self.check_object_permissions(self.request, obj)
-        return obj
+        note = Notes.objects.filter(user=self.request.user, isDelete='false')
+        return note
+    def get(self, request, *args, **kwargs):
+        try:
+            note = self.get_object()
+            if note:
+                serializer = self.get_serializer(note)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            else:
+                return Response({"detail": "No note found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print("GET: Unexpected error occurred")
+            print(str(e)) 
+            return Response({
+                "error": "An unexpected error occurred.",
+                "message": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def get(self, request, pk):
-        note = self.get_object()
-        return Response(self.get_serializer(note).data)
+    def patch(self, request, *args, **kwargs):
+        try:
+            note = self.get_object()
+            if note:
+                print(f"PATCH: Updating existing note for user {request.user.id}")
+                serializer = self.get_serializer(note, data=request.data, partial=True)
+                if serializer.is_valid():
+                    serializer.save()
+                    print("PATCH: Note updated successfully")
+                    return Response(serializer.data, status=status.HTTP_200_OK)
 
-    def patch(self, request, pk):
-        note = self.get_object()
-        serializer = self.get_serializer(note, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                print(f"PATCH: Validation failed for update - {serializer.errors}")
+                return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
+            else:
+                print(f"PATCH: No note found for user {request.user.id}, creating new note")
+                serializer = self.get_serializer(data=request.data)
+                if serializer.is_valid():
+                    expiry_date = timezone.now().date() + timedelta(days=7)
+                    serializer.save(user=request.user, isDelete='false', expiry_date=expiry_date)
+                    print("PATCH: New note created successfully")
+                    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+                print(f"PATCH: Validation failed for create - {serializer.errors}")
+                return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            print("PATCH: Unexpected error occurred")
+            print(str(e))  # Only prints the error message, not full traceback
+            return Response({
+                "error": "An unexpected error occurred.",
+                "message": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     def delete(self, request, pk):
         note = self.get_object()
         serializer = self.get_serializer(note, data={'isDelete': 'true'}, partial=True)
