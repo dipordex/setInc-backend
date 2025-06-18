@@ -18,7 +18,11 @@ job_stores = {
     'redis': RedisJobStore(jobs_key='dispatched_trips_jobs',
                            run_times_key='dispatched_trips_running',
                            host=environ.get("REDIS_HOST", "localhost"),
-                           port=6379)
+                           port=int(environ.get("REDIS_PORT", 6379)),
+                           username=environ.get("REDIS_USERNAME", 'hir'),
+                           password=environ.get("REDIS_PASSWORD", 'Ordex@123'),
+                           db=int(environ.get("REDIS_DB", 0))
+                           )
 }
 scheduler = BackgroundScheduler(jobstores=job_stores)
 
@@ -29,16 +33,21 @@ logger = logging.getLogger(__name__)
 def run_scheduler():
     if not scheduler.running:
         try:
+            print("Starting APScheduler IN TASKS... for tasks.")
             scheduler.start()
+            print(f"APScheduler running state: {scheduler.running}")
         except KeyboardInterrupt:
+            print("KeyboardInterrupt received, shutting down scheduler...")
             scheduler.shutdown()
             logger.info("Scheduler shutdown.")
+
 
 
 def get_task(task_id):
     try:
         task = Task.objects.get(pk=task_id)
         logger.info(f"STARTED NOTIFICATION FOR USER -> {task.user.name} TASK ID -> {task.pk}")
+        print(f"STARTED NOTIFICATION FOR USER IN TASKS -> {task}")
         return task
     except Task.DoesNotExist:
         logger.error(f"Task with id {task_id} does not exist.")
@@ -48,6 +57,7 @@ def get_task(task_id):
 def get_timezone(task_timezone_str: str):
     try:
         task_timezone = pytz.timezone(task_timezone_str)
+        print(f"Task timezone set to {task_timezone_str}.")
     except pytz.UnknownTimeZoneError:
         logger.error(f"Invalid timezone '{task_timezone_str}'. Falling back to server's default timezone.")
         task_timezone = pytz.timezone(settings.TIME_ZONE)
@@ -58,11 +68,13 @@ def get_task_times(task: Task) -> tuple:
     task_timezone_str = task.time_zone if task.time_zone else settings.TIME_ZONE
     task_timezone = get_timezone(task_timezone_str)
     task_datetime = datetime.datetime.combine(task.date, task.start_time)
+    print("TASKS IN get_task_times........")
     return task_timezone.localize(task_datetime), datetime.datetime.now(task_timezone)
 
 
 @dramatiq.actor(queue_name=environ.get('DRAMATIQ_DEFAULT_QUEUE', 'redis'))
 def schedule_task_notification(task_id: int):
+    print(f"Scheduling task notification for task ID: {task_id}")
     if not (task := get_task(task_id)):
         return
 
@@ -144,6 +156,7 @@ def remove_scheduled_job(task_id: int, func_name: str):
 
 
 def schedule_job(func, task, run_date):
+    print("IN TASKS SCHEDULE JOB QUES...")
     scheduler.add_job(
         func,
         'date',
