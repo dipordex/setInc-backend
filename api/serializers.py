@@ -148,6 +148,9 @@ class StopwatchSerializer(serializers.ModelSerializer):
             instance = self.get_queryset().filter(id=stopwatch.data.get("id")).first()
             if instance:
                 try:
+                    print(f"Stopwatch created: {instance.id}")
+                    
+                    print("Emitting Socket.IO event for stopwatch creation")
                     async_to_sync(sio.emit)(
                         'stopwatch_created',
                         {

@@ -63,6 +63,7 @@ from django.db.models import (
     Count, ExpressionWrapper, F, DurationField, Case, When, Value, IntegerField
 )
 from django.db.models.functions import Now, ExtractDay, ExtractHour, ExtractMinute, ExtractSecond
+from rest_framework.generics import UpdateAPIView
 
 
 UserModel = get_user_model()
@@ -633,19 +634,19 @@ class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView,
     )
 
 
-class StopwatchEditAPI(generics.UpdateAPIView):
+class StopwatchEditAPI(UpdateAPIView):
     serializer_class = StopwatchSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        if getattr(self, "swagger_fake_view", False):
-            return Stopwatch.objects.none()
         return Stopwatch.objects.filter(user=self.request.user)
 
-    def perform_update(self, serializer):
-        instance = serializer.save()
-
-        # Emit Socket.IO event after update
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
         async_to_sync(sio.emit)(
             'stopwatch_updated',
             {
@@ -653,6 +654,13 @@ class StopwatchEditAPI(generics.UpdateAPIView):
                 # "message': f"Stopwatch {instance.id} has been updated."
             }
         )
+        print(status.HTTP_201_CREATED, "Stopwatch updated successfully")
+        return Response({
+            "status": True,
+            "message": "Updated successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
 
 class LapAPI(generics.CreateAPIView):
     serializer_class = LapSerializer
