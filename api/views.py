@@ -54,6 +54,7 @@ from rest_framework.permissions import AllowAny
 from django.utils.dateparse import parse_datetime
 from django.utils.timezone import now
 from socket_instance import sio
+from asgiref.sync import async_to_sync
 from rest_framework import status as http_status
 from django.db.models import (
     Count, ExpressionWrapper, F, DurationField, Case, When, Value, IntegerField
@@ -557,47 +558,11 @@ class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView,
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Stopwatch.objects.none()
-
-        full_elapsed = Case(
-            When(
-                status=Stopwatch.STATUS_STARTED,
-                start_time__isnull=False,
-                then=ExpressionWrapper(
-                    F("pre_time_diff") + (Now() - F("start_time")),
-                    output_field=DurationField()
-                )
-            ),
-            When(
-                status=Stopwatch.STATUS_STOPPED,
-                then=F("pre_time_diff")
-            ),
-            default=Value(None),
-            output_field=DurationField()
-        )
-
-        base_queryset = Stopwatch.objects.annotate(
-            lap_count=Count("laps"),
-            raw_time_diff=full_elapsed,
-        ).annotate(
-            time_diff_sec=Case(
-                When(
-                    raw_time_diff__isnull=False,
-                    then=(
-                        ExtractDay("raw_time_diff") * 86400 +
-                        ExtractHour("raw_time_diff") * 3600 +
-                        ExtractMinute("raw_time_diff") * 60 +
-                        ExtractSecond("raw_time_diff")
-                    )
-                ),
-                default=Value(None),
-                output_field=IntegerField()
-            )
-        )
-        print("Base Queryset:", base_queryset.query)
+        base_queryset = Stopwatch.objects.filter(user=self.request.user).order_by("id")
+        
         if check_subscription(self.request):
-            return base_queryset.filter(user=self.request.user)
-
-        return base_queryset.filter(user=self.request.user)[:constants.COUNT_UNSUBSCRIBED_STOPWATCHES]
+            return base_queryset
+        return base_queryset[:constants.COUNT_UNSUBSCRIBED_STOPWATCHES]
 
     def delete(self, request, pk=None):
         if pk:
@@ -628,7 +593,6 @@ class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView,
     )
 
 
-
 class StopwatchEditAPI(generics.UpdateAPIView):
     serializer_class = StopwatchSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -636,10 +600,19 @@ class StopwatchEditAPI(generics.UpdateAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Stopwatch.objects.none()
-        if check_subscription(self.request):
-            return Stopwatch.objects.filter(user=self.request.user)
-        return Stopwatch.objects.filter(user=self.request.user)[:constants.COUNT_UNSUBSCRIBED_STOPWATCHES]
+        return Stopwatch.objects.filter(user=self.request.user)
 
+    def perform_update(self, serializer):
+        instance = serializer.save()
+
+        # Emit Socket.IO event after update
+        async_to_sync(sio.emit)(
+            'stopwatch_updated',
+            {
+                'id': instance.id,
+                # "message': f"Stopwatch {instance.id} has been updated."
+            }
+        )
 
 class LapAPI(generics.CreateAPIView):
     serializer_class = LapSerializer
@@ -813,68 +786,61 @@ class PublicStopwatchAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+
 class StopwatchActionAPI(APIView):
     """
     Unified endpoint to start, stop, or reset a stopwatch.
     Use query param: ?status=start|stop|reset
+    Accepts optional ISO datetime strings for start_time and stopped_time in the request body.
     """
     permission_classes = [IsAuthenticated]
-
     def post(self, request, pk):
-        action = request.query_params.get('status')
+        action = request.query_params.get("status")
 
         if action not in ["start", "stop", "reset"]:
-            return Response({"detail": "Invalid status. Use start, stop, or reset."}, status=http_status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Invalid status. Use start, stop, or reset."},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         try:
             stopwatch = Stopwatch.objects.get(pk=pk, user=request.user)
         except Stopwatch.DoesNotExist:
-            return Response({"detail": "Stopwatch not found."}, status=http_status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Stopwatch not found."},
+                            status=status.HTTP_404_NOT_FOUND)
 
+        now_time = now()
         message = ""
+
         if action == "start":
             if stopwatch.status == "started":
-                return Response({"detail": "Stopwatch already started."}, status=http_status.HTTP_400_BAD_REQUEST)
+                return Response({"detail": "Stopwatch already started."}, status=status.HTTP_400_BAD_REQUEST)
 
+            stopwatch.start_time = now_time
             stopwatch.status = "started"
-            # stopwatch.stopped_time = None
-            stopwatch.start_time = now()  # Set start time when starting
-            message = "Stopwatch started"
+            message = "Countdown started"
 
         elif action == "stop":
             if stopwatch.status != "started":
-                return Response({"detail": "Stopwatch is not running."}, status=http_status.HTTP_400_BAD_REQUEST)
-
+                return Response({"detail": "Stopwatch is not running."}, status=status.HTTP_400_BAD_REQUEST)
+        
+            elapsed = now_time - stopwatch.start_time
+            # Accumulate elapsed time to countdown_duration
+            stopwatch.countdown_duration = (stopwatch.countdown_duration or timedelta()) + elapsed
+            stopwatch.start_time = None
             stopwatch.status = "stopped"
-            stopwatch.stopped_time = timezone.now()
-
-        # Save accumulated time
-            if stopwatch.start_time:
-                current_session = stopwatch.stopped_time - stopwatch.start_time
-                stopwatch.pre_time_diff = (stopwatch.pre_time_diff or timedelta()) + current_session
-                stopwatch.save()
-                message = "Stopwatch stopped"
+            message = "Countdown stopped"
 
         elif action == "reset":
+            stopwatch.countdown_duration = timedelta(seconds=0)
+            stopwatch.start_time = None
             stopwatch.status = "reset"
-            stopwatch.stopped_time = None
-            stopwatch.pre_time_diff = None
+            message = "Countdown reset"
             stopwatch.laps.all().delete()
-            stopwatch.start_time = None  # optional: also clear `start_time`
-            message = "Stopwatch reset"
-
         stopwatch.save()
-
-        # Emit over socket.io
-        sio.emit("stopwatch_status", {
-            "id": stopwatch.id,
-            "status": stopwatch.status,
-            "message": message
-        })
 
         return Response({
             "id": stopwatch.id,
-            "message": message,
             "status": stopwatch.status,
-            "stopped_time": stopwatch.stopped_time,
-        }, status=http_status.HTTP_200_OK)
+            "countdown_duration": stopwatch.countdown_duration,
+            "start_time": stopwatch.start_time,
+            "message": message
+        }, status=status.HTTP_200_OK)

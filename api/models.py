@@ -139,10 +139,12 @@ class Stopwatch(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='stopwatches')
     public_uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    start_time = models.DateTimeField(null=True)
-    stopped_time = models.DateTimeField(null=True)
-    pre_time_diff = models.DurationField(null=True, blank=True, default=timedelta)
-    
+    countdown_duration = models.DurationField(
+        default=timedelta(seconds=0),
+        help_text="Duration for countdown stopwatch, if applicable."
+    )
+    start_time = models.DateTimeField(null=True, blank=True)  # <-- Required
+
     STATUS_NOT_STARTED = 'not_started'
     STATUS_STARTED = 'started'
     STATUS_STOPPED = 'stopped'

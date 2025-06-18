@@ -11,7 +11,7 @@ BASE_DIR = path.dirname(path.dirname(path.abspath(__file__)))
 SECRET_KEY = environ.get('SECRET_KEY',
                          "UtXxcyXkFnktfTVfQnYMNcNjbeNhoDAARwIEynoFeESwASfxNPJRELMpCFwI")
 
-DEBUG = environ.get('DEBUG', False)
+DEBUG = environ.get('DEBUG', True)
 THUMBNAIL_DEBUG = DEBUG
 
 ALLOWED_HOSTS = [ '*']
