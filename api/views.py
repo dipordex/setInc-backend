@@ -70,10 +70,13 @@ UserModel = get_user_model()
 def check_subscription(request) -> bool:
     # Check if the user has a subscription
     if not request.user.has_subscription:
+        print(request.user.has_subscription, "User does not have a subscription.")
+        print("User does not have a subscription.")
         return False
 
     # Check if the user has a receipt
     if not hasattr(request.user, 'receipt'):
+        print("User does not have a receipt.")
         return False
 
     # Ensure payment_expires is timezone-aware and in UTC
@@ -81,12 +84,14 @@ def check_subscription(request) -> bool:
 
     # If payment_expires is naive (no timezone), make it timezone-aware (convert to server time)
     if timezone.is_naive(payment_expires):
+        print("Payment expiration date is naive, converting to aware.")
         payment_expires = timezone.make_aware(payment_expires, timezone.get_current_timezone())
 
     # Convert to UTC for comparison
     payment_expires_utc = payment_expires.astimezone(pytz.UTC)
     # Check if the payment expiration date is in the future and user has a subscription
     if payment_expires_utc > datetime.now(tz=pytz.UTC):
+        print("User has a valid subscription.")
         return True
 
     # If the subscription is expired, update and save
@@ -598,6 +603,14 @@ class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView,
             # stopwatch.stopped_time = None
             stopwatch.delete()
             stopwatch.laps.all().delete()
+             # Emit Socket.IO event after update
+            async_to_sync(sio.emit)(
+                'stopwatch_deleted',
+                {
+                    'id': stopwatch.id,
+                    'message': f"Stopwatch {stopwatch.id} has been deleted."
+                }
+            )
             return Response(
                 {"message": f"Stopwatch {pk} has been deleted and its laps deleted."},
                 status=status.HTTP_200_OK
@@ -861,6 +874,14 @@ class StopwatchActionAPI(APIView):
             stopwatch.status = "reset"
             message = "Countdown reset"
             stopwatch.laps.all().delete()
+             # Emit Socket.IO event after reset
+            async_to_sync(sio.emit)(
+                'laps_deleted',
+                {
+                    'id': stopwatch.id,
+                    'message': f"laps deleted for Stopwatch {stopwatch.id} ."
+                }
+            )
         stopwatch.save()
 
         return Response({

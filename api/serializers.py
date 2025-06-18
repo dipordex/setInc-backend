@@ -1,4 +1,5 @@
 import datetime
+from urllib import response
 
 from django.contrib.auth import get_user_model
 from rest_framework import serializers, status
@@ -14,7 +15,9 @@ from datetime import timedelta
 
 UserModel = get_user_model()
 
-
+import logging
+from socket_instance import sio
+from asgiref.sync import async_to_sync
 class PhoneNumberSerializer(serializers.Serializer):
     phone_number = serializers.CharField(min_length=5)
 
@@ -140,7 +143,21 @@ class StopwatchSerializer(serializers.ModelSerializer):
 
         stopwatch = Stopwatch.objects.create(user=request.user,
                                              **validated_data)
-        return stopwatch
+        
+        if stopwatch.status_code == status.HTTP_201_CREATED:
+            instance = self.get_queryset().filter(id=stopwatch.data.get("id")).first()
+            if instance:
+                try:
+                    async_to_sync(sio.emit)(
+                        'stopwatch_created',
+                        {
+                            'id': instance.id,
+                            'message': f"Stopwatch {instance.id} has been created."
+                        }
+                    )
+                except Exception as e:
+                    logging.error(f"Socket.IO emit failed: {e}")
+                return stopwatch
 
     def get_laps(self, obj):
         return obj.laps.count()
@@ -192,6 +209,14 @@ class LapSerializer(serializers.ModelSerializer):
                 status.HTTP_404_NOT_FOUND)
 
         lap = Lap.objects.create(**validated_data)
+         # Emit Socket.IO event after update
+        async_to_sync(sio.emit)(
+            'laps_created',
+            {
+                'id': lap.id,
+                'message': f"Lap {lap.id} has been created."
+            }
+        )
 
         return lap
 
