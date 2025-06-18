@@ -122,45 +122,28 @@ class FCMTokenSerializer(serializers.Serializer):
 class StopwatchSerializer(serializers.ModelSerializer):
     laps = serializers.SerializerMethodField(read_only=True)
     countdown_duration = serializers.SerializerMethodField(read_only=True)
-
+    
     class Meta:
         model = Stopwatch
         exclude = ('user',)
 
-    def create(self, validated_data):
-        from .views import check_subscription
-        request = self.context.get('request')
-        if (not check_subscription(request) and
-                request.user.stopwatches.count() >= constants.COUNT_UNSUBSCRIBED_STOPWATCHES):
-            raise ValidationError(
-                {
-                    'message': f'You can not create new stopwatch, '
-                               f'because you have {constants.COUNT_UNSUBSCRIBED_STOPWATCHES} '
-                               f'stopwatches and have not subscription!',
-                    'type': 'subscription'
-                },
-                status.HTTP_400_BAD_REQUEST)
+    # def create(self, validated_data):
+        # from .views import check_subscription
+        # request = self.context.get('request')
+        # if (not check_subscription(request) and
+        #         request.user.stopwatches.count() >= constants.COUNT_UNSUBSCRIBED_STOPWATCHES):
+        #     raise ValidationError(
+        #         {
+        #             'message': f'You can not create new stopwatch, '
+        #                        f'because you have {constants.COUNT_UNSUBSCRIBED_STOPWATCHES} '
+        #                        f'stopwatches and have not subscription!',
+        #             'type': 'subscription'
+        #         },
+        #         status.HTTP_400_BAD_REQUEST)
 
-        stopwatch = Stopwatch.objects.create(user=request.user,
-                                             **validated_data)
-        
-        if stopwatch.status_code == status.HTTP_201_CREATED:
-            instance = self.get_queryset().filter(id=stopwatch.data.get("id")).first()
-            if instance:
-                try:
-                    print(f"Stopwatch created: {instance.id}")
-                    
-                    print("Emitting Socket.IO event for stopwatch creation")
-                    async_to_sync(sio.emit)(
-                        'stopwatch_created',
-                        {
-                            'id': instance.id,
-                            'message': f"Stopwatch {instance.id} has been created."
-                        }
-                    )
-                except Exception as e:
-                    logging.error(f"Socket.IO emit failed: {e}")
-                return stopwatch
+        # stopwatch = Stopwatch.objects.create(user=request.user,
+        #                                      **validated_data)
+        # return stopwatch
 
     def get_laps(self, obj):
         return obj.laps.count()

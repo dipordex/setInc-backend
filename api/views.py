@@ -584,33 +584,31 @@ class TimezoneListView(APIView):
         return formatted_timezones
 
 
-class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView,
-                   generics.DestroyAPIView):
+class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView, generics.DestroyAPIView):
     serializer_class = StopwatchSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Stopwatch.objects.none()
+
         base_queryset = Stopwatch.objects.filter(user=self.request.user).order_by("id")
-        
         if check_subscription(self.request):
             return base_queryset
         return base_queryset[:constants.COUNT_UNSUBSCRIBED_STOPWATCHES]
 
     def delete(self, request, pk=None):
         if pk:
-            # Delete/reset a specific stopwatch by ID
+            # Delete a specific stopwatch by ID
             stopwatch = get_object_or_404(Stopwatch, pk=pk, user=request.user)
-            # stopwatch.status = "notStarted"  # Or "reset" if allowed
-            # stopwatch.stopped_time = None
             stopwatch.delete()
             stopwatch.laps.all().delete()
-             # Emit Socket.IO event after update
+            
             async_to_sync(sio.emit)(
                 'stopwatch_deleted',
                 {
-                    'id': stopwatch.id,
-                    'message': f"Stopwatch {stopwatch.id} has been deleted."
+                    'id': pk,
+                    'message': f"Stopwatch {pk} has been deleted."
                 }
             )
             return Response(
@@ -618,7 +616,7 @@ class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView,
                 status=status.HTTP_200_OK
             )
 
-    # Bulk delete/reset all stopwatches for the user
+        # Bulk reset
         stopwatches = Stopwatch.objects.filter(user=request.user)
         count = 0
         for stopwatch in stopwatches:
@@ -628,10 +626,52 @@ class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView,
             stopwatch.laps.all().delete()
             count += 1
 
-            return Response(
+        return Response(
             {"message": f"{count} stopwatch(es) have been reset and laps deleted."},
             status=status.HTTP_200_OK
-    )
+        )
+
+    def perform_create(self, serializer):
+        request = self.request
+
+        if (not check_subscription(request) and
+                request.user.stopwatches.count() >= constants.COUNT_UNSUBSCRIBED_STOPWATCHES):
+            raise ValidationError(
+                {
+                    'message': f'You cannot create a new stopwatch. '
+                               f'Limit of {constants.COUNT_UNSUBSCRIBED_STOPWATCHES} reached.',
+                    'type': 'subscription'
+                },
+                code=status.HTTP_400_BAD_REQUEST
+            )
+
+        instance = serializer.save(user=request.user)
+        return instance
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        instance = self.perform_create(serializer)
+
+        try:
+            print(f"Stopwatch created: {instance.id}")
+            async_to_sync(sio.emit)(
+                'stopwatch_created',
+                {
+                    'id': instance.id,
+                    'message': f"Stopwatch {instance.id} has been created."
+                }
+            )
+        except Exception as e:
+            logging.error(f"Socket.IO emit failed: {e}")
+
+        return Response({
+            "status": True,
+            "message": "Stopwatch created successfully.",
+            "data": self.get_serializer(instance).data,
+            "status_code": status.HTTP_201_CREATED
+        }, status=status.HTTP_201_CREATED)
 
 
 class StopwatchEditAPI(UpdateAPIView):
