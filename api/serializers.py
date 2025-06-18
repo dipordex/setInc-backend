@@ -170,6 +170,7 @@ class StopwatchSerializer(serializers.ModelSerializer):
         # When stopped or paused, return stored countdown_duration
         return str(base_duration)
 
+
 class LapSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lap
@@ -186,24 +187,23 @@ class LapSerializer(serializers.ModelSerializer):
                     'message': 'No stopwatch found with the given id!'
                 },
                 status.HTTP_404_NOT_FOUND)
-        elif not user.has_subscription and request.user.stopwatches.count() >= 2:
-            raise ValidationError(
-                {
-                    'message': 'You can not create lap!',
-                    'type': 'subscription'
-                },
-                status.HTTP_404_NOT_FOUND)
-
+        # elif not user.has_subscription and request.user.stopwatches.count() >= 5:
+        #     raise ValidationError(
+        #         {
+        #             'message': 'You can not create lap!',
+        #             'type': 'subscription'
+        #         },
+        #         status.HTTP_404_NOT_FOUND)
+        
         lap = Lap.objects.create(**validated_data)
-         # Emit Socket.IO event after update
         async_to_sync(sio.emit)(
-            'laps_created',
-            {
-                'id': lap.id,
-                'message': f"Lap {lap.id} has been created."
-            }
-        )
-
+                'laps_created',
+                {
+                    'id': lap.id,
+                    'message': f"Lap {lap.id} has been created."
+                },
+                room=str(user.id)
+				)
         return lap
 
 

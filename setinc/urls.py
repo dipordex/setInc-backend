@@ -1,5 +1,6 @@
 from drf_yasg import openapi
 from api.views import MainView, PublicStopwatchAPI
+  # Adjust the import path if send_task_start is in a different module
 from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include
@@ -27,8 +28,7 @@ urlpatterns = [
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),    
     path('accounts/', include('django.contrib.auth.urls')),
-    path("api/public/stopwatch/", PublicStopwatchAPI.as_view(), name="public_stopwatch")
-
+    path("api/public/stopwatch/", PublicStopwatchAPI.as_view(), name="public_stopwatch"),
 ]
 
 if settings.MEDIA_URL and settings.MEDIA_ROOT:

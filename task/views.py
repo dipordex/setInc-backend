@@ -76,12 +76,14 @@ class StartTaskTracker(APIView):
             task.save()
 
         serializer = TaskTrackedTimeSerializer(task)
+        user_id = str(task.user.id)
 
         # Emit socket.io event to all of user's connected devices
         async_to_sync(sio.emit)(
             'task_started',
             serializer.data,
-            room=str(request.user.id)
+            room=user_id
+            
         )
 
         if task.send_notification:
@@ -120,7 +122,7 @@ class StopTaskTracker(APIView):
                     'message': 'Task tracking stopped',
                     # 'duration': str(tracked_duration)
                 },
-                room=str(request.user.id)
+                room=str(task.user_id)
             )
             remove_scheduled_job.send_with_options(args=(task.pk,  send_task_duration_reminder_notification.__name__))
             return Response(SuccessMessages.TASK_TRACKING_STOPPED, status=status.HTTP_200_OK)

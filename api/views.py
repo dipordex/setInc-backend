@@ -219,7 +219,14 @@ class CreateTaskAPI(generics.GenericAPIView):
         time_zone, _ = user_friendly_timezone_to_iana(data.get('time_zone'), request.user)
         validate_date_and_time(time_zone, data.get('date'), data.get("start_time"), data.get("end_time"))
         task = serializer.save(user=request.user, time_zone=time_zone)
-
+        async_to_sync(sio.emit)(
+            'task_created',
+            {
+                'id': task.id,
+                'message': f"Task {task.id} created."
+            },
+            room=str(task.user_id)
+            )
         if task.send_notification:
             schedule_task_notification.send_with_options(args=(task.id,))
         return Response(serializer.data)
@@ -247,12 +254,34 @@ class TaskAPI(generics.GenericAPIView):
         if serializer.is_valid():
             service = TaskUpdateService(task=task, user=request.user)
             task = service.update_task(serializer.validated_data)
+            user_id = str(task.user_id)
+            async_to_sync(sio.emit)(
+                'task_updated',
+                {
+                    'id': task.id,
+                    'message': f"Task {task.id} updated."
+                },
+                room=user_id
+                
+
+            )
+
             return Response(self.get_serializer(task).data)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
         task = self.get_object()
+        user_id = str(task.user_id)
+        async_to_sync(sio.emit)(
+            'task_deleted',
+            {
+                'id': task.id,
+                'message': f"Task {task.id} deleted."
+            },
+            room=user_id
+        )
+
         task.delete()
         return Response(status=status.HTTP_200_OK)
 
@@ -601,16 +630,22 @@ class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView, generics.Destro
         if pk:
             # Delete a specific stopwatch by ID
             stopwatch = get_object_or_404(Stopwatch, pk=pk, user=request.user)
-            stopwatch.delete()
-            stopwatch.laps.all().delete()
-            
+            user_id = str(stopwatch.user_id)
+            print(f"Stopwatch deleted: {stopwatch.id}")
+            print(f"User ID for stopwatch deletion: {user_id}")
+            print(f"Socket event for stopwatch deletion: {stopwatch.id}")
+
             async_to_sync(sio.emit)(
                 'stopwatch_deleted',
                 {
                     'id': pk,
                     'message': f"Stopwatch {pk} has been deleted."
-                }
+                },
+                room=user_id
             )
+            stopwatch.delete()
+            stopwatch.laps.all().delete()
+            print(f"Stopwatch {pk} and its laps deleted successfully.")
             return Response(
                 {"message": f"Stopwatch {pk} has been deleted and its laps deleted."},
                 status=status.HTTP_200_OK
@@ -656,12 +691,15 @@ class StopwatchAPI(generics.CreateAPIView, generics.ListAPIView, generics.Destro
 
         try:
             print(f"Stopwatch created: {instance.id}")
+            user_id = str(instance.user_id)  # ✅ fix here
+
             async_to_sync(sio.emit)(
                 'stopwatch_created',
                 {
                     'id': instance.id,
                     'message': f"Stopwatch {instance.id} has been created."
-                }
+                },
+                room=user_id
             )
         except Exception as e:
             logging.error(f"Socket.IO emit failed: {e}")
@@ -687,12 +725,15 @@ class StopwatchEditAPI(UpdateAPIView):
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
+        user_id = str(instance.user_id)
+
         async_to_sync(sio.emit)(
             'stopwatch_updated',
             {
                 'id': instance.id,
                 # "message': f"Stopwatch {instance.id} has been updated."
-            }
+            },
+            room=user_id
         )
         print(status.HTTP_201_CREATED, "Stopwatch updated successfully")
         return Response({
@@ -901,10 +942,25 @@ class StopwatchActionAPI(APIView):
         if action == "start":
             if stopwatch.status == "started":
                 return Response({"detail": "Stopwatch already started."}, status=status.HTTP_400_BAD_REQUEST)
+            
 
             stopwatch.start_time = now_time
             stopwatch.status = "started"
             message = "Countdown started"
+            user_id = str(stopwatch.user_id)
+            print("stopwatch user id on satrt", stopwatch.user_id)
+            print("socket event for stopwatch started", stopwatch.id)
+            async_to_sync(sio.emit)(
+                'stopwatch_started',
+                {
+                    'id': stopwatch.id,
+                    'message': f"Stopwatch {stopwatch.id} started."
+                },
+                
+                room=user_id  # Target only this user
+            )
+
+            
 
         elif action == "stop":
             if stopwatch.status != "started":
@@ -916,6 +972,20 @@ class StopwatchActionAPI(APIView):
             stopwatch.start_time = None
             stopwatch.status = "stopped"
             message = "Countdown stopped"
+            user_id = str(stopwatch.user_id)
+            print("stopwatch user id", stopwatch.user_id)
+            print(stopwatch.user_id, "stopwatch user id")
+            print("socket event for stopwatch stopped", stopwatch.id)
+            async_to_sync(sio.emit)(
+                'stopwatch_stopped',
+                {
+                    'id': stopwatch.id,
+                    'message': f"Stopwatch {stopwatch.id} stopped."
+                },
+                room=user_id  # Target only this user
+
+
+            )
 
         elif action == "reset":
             stopwatch.countdown_duration = timedelta(seconds=0)
@@ -924,12 +994,15 @@ class StopwatchActionAPI(APIView):
             message = "Countdown reset"
             stopwatch.laps.all().delete()
              # Emit Socket.IO event after reset
+            user_id = str(stopwatch.user_id)
             async_to_sync(sio.emit)(
                 'laps_deleted',
                 {
                     'id': stopwatch.id,
                     'message': f"laps deleted for Stopwatch {stopwatch.id} ."
-                }
+                },
+                room=user_id  # Target only this user
+
             )
         stopwatch.save()
 
