@@ -119,8 +119,45 @@ class FCMTokenSerializer(serializers.Serializer):
     device_id = serializers.CharField()
 
 
+class LapSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Lap
+        fields = '__all__'
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        user = request.user
+        user_stopwatches = user.stopwatches.all()
+
+        if validated_data.get('stopwatch') not in user_stopwatches:
+            raise ValidationError(
+                {
+                    'message': 'No stopwatch found with the given id!'
+                },
+                status.HTTP_404_NOT_FOUND)
+        # elif not user.has_subscription and request.user.stopwatches.count() >= 5:
+        #     raise ValidationError(
+        #         {
+        #             'message': 'You can not create lap!',
+        #             'type': 'subscription'
+        #         },
+        #         status.HTTP_404_NOT_FOUND)
+        
+        lap = Lap.objects.create(**validated_data)
+        async_to_sync(sio.emit)(
+                'laps_created',
+                {
+                    'id': lap.id,
+                    'message': f"Lap {lap.id} has been created."
+                },
+                room=str(user.id)
+                )
+        return lap
+
 class StopwatchSerializer(serializers.ModelSerializer):
-    laps = serializers.SerializerMethodField(read_only=True)
+    laps = LapSerializer(many=True, read_only=True)  # assuming related_name='laps'
+    total_lap = serializers.SerializerMethodField(read_only=True)
+
     countdown_duration = serializers.SerializerMethodField(read_only=True)
     
     class Meta:
@@ -145,8 +182,8 @@ class StopwatchSerializer(serializers.ModelSerializer):
         #                                      **validated_data)
         # return stopwatch
 
-    def get_laps(self, obj):
-        return obj.laps.count()
+    def get_total_lap(self, obj):
+        return obj.laps.count()  # Assuming related_name='laps'
     # def to_representation(self, instance):
     #     data = super().to_representation(instance)
     #     if data.get("latitude"):
