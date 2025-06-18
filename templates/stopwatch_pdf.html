@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head><title>Stopwatch</title></head>
+<body>
+    <h1>{{ stopwatch.label }}</h1>
+    <p><strong>Date Time:</strong> {{ stopwatch.date_time }}</p>
+    {% if stopwatch.latitude and stopwatch.longitude %}
+        <p><strong>Location:</strong> {{ stopwatch.latitude }}, {{ stopwatch.longitude }}</p>
+        <p><strong>Address:</strong> {{ stopwatch.address }}</p>
+    {% endif %}
+</body>
+</html>

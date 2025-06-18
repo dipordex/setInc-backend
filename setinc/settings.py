@@ -11,10 +11,10 @@ BASE_DIR = path.dirname(path.dirname(path.abspath(__file__)))
 SECRET_KEY = environ.get('SECRET_KEY',
                          "UtXxcyXkFnktfTVfQnYMNcNjbeNhoDAARwIEynoFeESwASfxNPJRELMpCFwI")
 
-DEBUG = environ.get('DEBUG', False)
+DEBUG = environ.get('DEBUG', True)
 THUMBNAIL_DEBUG = DEBUG
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [ '*']
 
 DATABASES = {
     'default': {
@@ -134,13 +134,14 @@ LOGGING = {
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'Australia/Sydney'
+# TIME_ZONE = 'Australia/Sydney'
+TIME_ZONE = 'UTC'  # or 'Asia/Kolkata', but prefer UTC in DB
 
 USE_I18N = True
 
 USE_L10N = True
 
-USE_TZ = False
+USE_TZ = True
 
 SITE_ID = 1
 

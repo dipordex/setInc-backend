@@ -9,7 +9,7 @@ from django.utils import timezone
 from .managers import CustomUserManager
 from django.core.validators import MinLengthValidator
 from django.core.validators import MaxValueValidator, MinValueValidator
-
+import uuid
 
 class User(AbstractBaseUser, PermissionsMixin):
     phone_number = PhoneNumberField(unique=True)
@@ -133,14 +133,31 @@ class DefaultAlarm(models.Model):
 class Stopwatch(models.Model):
     label = models.CharField(max_length=50)
     date_time = models.DateTimeField(auto_now_add=True)
-    longitude = models.DecimalField(max_digits=20, decimal_places=16,
-                                    null=True, blank=True)
-    latitude = models.DecimalField(max_digits=20, decimal_places=16, null=True,
-                                   blank=True)
+    longitude = models.DecimalField(max_digits=20, decimal_places=16, null=True, blank=True)
+    latitude = models.DecimalField(max_digits=20, decimal_places=16, null=True, blank=True)
     address = models.CharField(max_length=200, blank=True, null=True)
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE,
-                             related_name='stopwatches')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='stopwatches')
+    public_uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    countdown_duration = models.DurationField(
+        default=timedelta(seconds=0),
+        help_text="Duration for countdown stopwatch, if applicable."
+    )
+    start_time = models.DateTimeField(null=True, blank=True)  # <-- Required
+
+    STATUS_NOT_STARTED = 'not_started'
+    STATUS_STARTED = 'started'
+    STATUS_STOPPED = 'stopped'
+    STATUS_RESET = 'reset'
+
+    STATUS_CHOICES = [
+        (STATUS_NOT_STARTED, 'Not Started'),
+        (STATUS_STARTED, 'Started'),
+        (STATUS_STOPPED, 'Stopped'),
+        (STATUS_RESET, 'Reset'),
+    ]
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_NOT_STARTED)
 
     class Meta:
         verbose_name_plural = "Stopwatches"

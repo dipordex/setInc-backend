@@ -9,6 +9,8 @@ from rest_framework.serializers import ValidationError
 from .models import Notes, User, Task, TaskCategory, DefaultAlarm, Quote, Stopwatch, Lap, Receipt
 
 from .validators import PhoneNumberValidation
+from django.utils.timezone import localtime, now
+from datetime import timedelta
 
 UserModel = get_user_model()
 
@@ -116,6 +118,7 @@ class FCMTokenSerializer(serializers.Serializer):
 
 class StopwatchSerializer(serializers.ModelSerializer):
     laps = serializers.SerializerMethodField(read_only=True)
+    countdown_duration = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Stopwatch
@@ -123,7 +126,6 @@ class StopwatchSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         from .views import check_subscription
-
         request = self.context.get('request')
         if (not check_subscription(request) and
                 request.user.stopwatches.count() >= constants.COUNT_UNSUBSCRIBED_STOPWATCHES):
@@ -138,12 +140,32 @@ class StopwatchSerializer(serializers.ModelSerializer):
 
         stopwatch = Stopwatch.objects.create(user=request.user,
                                              **validated_data)
-
         return stopwatch
 
     def get_laps(self, obj):
         return obj.laps.count()
+    # def to_representation(self, instance):
+    #     data = super().to_representation(instance)
+    #     if data.get("latitude"):
+    #         data["latitude"] = float(data["latitude"])
+    #     if data.get("longitude"):
+    #         data["longitude"] = float(data["longitude"])
+    #     return data
 
+
+    def get_countdown_duration(self, obj):
+        if obj.countdown_duration is None:
+            return "00:00:00"
+    
+        base_duration = obj.countdown_duration or timedelta(seconds=0)
+    
+        if obj.status == obj.STATUS_STARTED and obj.start_time:
+            elapsed = now() - obj.start_time
+            total_duration = base_duration + elapsed
+            return str(total_duration)
+    
+        # When stopped or paused, return stored countdown_duration
+        return str(base_duration)
 
 class LapSerializer(serializers.ModelSerializer):
     class Meta:
