@@ -1,8 +1,9 @@
 from django.apps import AppConfig
 import logging
 import os
-
+from os import environ, path
 logger = logging.getLogger(__name__)
+BASE_DIR = path.dirname(path.dirname(path.abspath(__file__)))
 
 class ApiConfig(AppConfig):
     name = 'api'
@@ -13,8 +14,9 @@ class ApiConfig(AppConfig):
             try:
                 # Firebase setup
                 import firebase_admin
-                from django.conf import settings
-                credentials = firebase_admin.credentials.Certificate(settings.FIREBASE_PATH)
+                FIREBASE_PATH = os.path.join(BASE_DIR, 'firebase.json')
+                credentials = firebase_admin.credentials.Certificate(FIREBASE_PATH)
+                print(f"DEBUG: Initializing Firebase with credentials from {FIREBASE_PATH}")
                 firebase_admin.initialize_app(credentials)
                 
                 # Notes scheduler 

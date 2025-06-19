@@ -7,6 +7,8 @@ from django.urls import path, include
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 
+from task.views import ScheduledJobsDebugAPI
+
 schema_view = get_schema_view(
     openapi.Info(
         title="Set Inc API documentation",
@@ -29,6 +31,7 @@ urlpatterns = [
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),    
     path('accounts/', include('django.contrib.auth.urls')),
     path("api/public/stopwatch/", PublicStopwatchAPI.as_view(), name="public_stopwatch"),
+    path("api/debug/scheduler-jobs/", ScheduledJobsDebugAPI.as_view(), name='scheduled_jobs_debug'),
 ]
 
 if settings.MEDIA_URL and settings.MEDIA_ROOT:

@@ -5,7 +5,7 @@ from datetime import timedelta
 
 import redis
 from firebase_admin import initialize_app
-
+                
 BASE_DIR = path.dirname(path.dirname(path.abspath(__file__)))
 
 SECRET_KEY = environ.get('SECRET_KEY',
@@ -63,7 +63,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'setinc.sql_debug_middleware.QueryDebugMiddleware',
+    # 'setinc.sql_debug_middleware.QueryDebugMiddleware',
 ]
 
 ROOT_URLCONF = 'setinc.urls'
@@ -87,6 +87,9 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'setinc.wsgi.application'
+# FCM_DJANGO_SETTINGS = {
+#     "FCM_SERVER_KEY": environ.get('FCM_SERVER_KEY')
+# }
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -110,22 +113,22 @@ LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'handlers': {
-        # 'file': {
-        #     'level': 'DEBUG',
-        #     'class': 'logging.FileHandler',
-        #     'filename': path.join(BASE_DIR, 'log/debug.log'),
-        # },
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': path.join(BASE_DIR, 'log/debug.log'),
+        },
         'console-stdout': {
             'class': 'logging.StreamHandler',
             'stream': sys.stdout,
         },
     },
     'loggers': {
-        # 'django-file': {
-        #     'handlers': ['file'],
-        #     'level': 'DEBUG',
-        #     'propagate': True,
-        # },
+        'django-file': {
+            'handlers': ['file'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
         'django.request': {
             'handlers': ['console-stdout'],
         },
@@ -204,7 +207,8 @@ AUTHENTICATION_BACKENDS = (
 # Background tasks
 REDIS_HOST = environ.get('REDIS_HOST', 'localhost')
 REDIS_PORT = environ.get('REDIS_PORT', 6379)
-REDIS_URL = environ.get("REDIS_URL", f'redis://{REDIS_HOST}:{REDIS_PORT}/0')
+REDIS_PASSWORD = environ.get('REDIS_PASSWORD', 'Ordex@123')
+REDIS_URL = environ.get("REDIS_URL", f'redis://{REDIS_HOST}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0')
 
 DRAMATIQ_BROKER = {
     "BROKER": "dramatiq.brokers.redis.RedisBroker",
@@ -287,11 +291,15 @@ APPLE_SHARED_SECRET = environ.get('APPLE_SHARED_SECRET')
 GOOGLE_BUNDLE_ID = environ.get('GOOGLE_BUNDLE_ID')
 GOOGLE_API_FILE = environ.get('GOOGLE_API_FILE')
 
-FCM_DJANGO_SETTINGS = {
-    "FCM_SERVER_KEY": environ.get('FCM_SERVER_KEY')
-}
+# FCM_DJANGO_SETTINGS = {
+#     "FCM_SERVER_KEY": environ.get('FCM_SERVER_KEY')
+# }
 
-FIREBASE_PATH = os.path.join(BASE_DIR, 'firebase.json') or None
+FCM_DJANGO_SETTINGS = {
+    "APP_VERBOSE_NAME": "FCM",
+    "ONE_DEVICE_PER_USER": False,
+    "DELETE_INACTIVE_DEVICES": False,
+}
 
 TWILIO_ACCOUNT_SID = environ.get('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = environ.get('TWILIO_AUTH_TOKEN')

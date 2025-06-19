@@ -59,7 +59,7 @@ def schedule_expired_notes_job():
     scheduler.add_job(
         mark_expired_notes,
         'interval',
-        seconds=30,
+        seconds= 60 * 60 * 24,  # Run every 24 hours
         jobstore=QUEUE_NAME,
         id='mark_expired_notes_job',
         replace_existing=True

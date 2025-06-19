@@ -1,4 +1,4 @@
-APP_NAME = "Setinc"
+APP_NAME = "setinc-ordex-dev"
 
 STOPWATCH_LAPS = 5
 COUNT_UNSUBSCRIBED_DATA = 5
