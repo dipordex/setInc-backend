@@ -31,7 +31,8 @@ def get_firebase_access_token():
 class NotificationManager:
     def __init__(self):
         self.app_name = constants.APP_NAME
-        self.project_id = environ.get("PROJECT_ID")  # 🔁 Replace this
+        self.project_id = constants.PROJECT_ID
+        print(f"DEBUG: Project ID set to: {self.project_id}")
         print(f"DEBUG: NotificationManager initialized with app_name: {self.app_name}")
         logger.info(f"NotificationManager initialized with app_name: {self.app_name}")
 
